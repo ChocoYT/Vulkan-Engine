@@ -42,3 +42,6 @@ target_link_libraries(${PROJECT_NAME} PRIVATE Vulkan::Vulkan)
 add_subdirectory(external/GLFW)
 target_link_libraries(${PROJECT_NAME} PRIVATE glfw)
 target_include_directories(${PROJECT_NAME} PRIVATE external/GLFW/include)
+
+# GLM
+target_include_directories(${PROJECT_NAME} PRIVATE external/GLM/include)
