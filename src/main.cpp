@@ -8,14 +8,13 @@ int main()
 {
     App app;
 
-    try
-    {
+    try {
         app.run();
     }
     catch (const std::exception &exception)
     {
         std::cerr << exception.what() << std::endl;
-        return EXIT_FAILURE;
+        return 1;
     }
 
     return 0;

@@ -1,4 +1,3 @@
-#define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
 #include <iostream>
@@ -13,11 +12,13 @@ class Window
         Window(int width, int height, std::string name);
         ~Window();
 
+        GLFWwindow* getHandle() const;
+
         int width;
         int height;
         std::string name;
 
-        GLFWwindow *window;
+        GLFWwindow *handle;
 
     private:
         void init();

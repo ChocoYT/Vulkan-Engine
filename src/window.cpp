@@ -11,9 +11,11 @@ Window::Window(int width, int height, std::string name)
 
 Window::~Window()
 {
-    glfwDestroyWindow(window);
+    glfwDestroyWindow(handle);
     glfwTerminate();
 }
+
+GLFWwindow* Window::getHandle() const { return handle; }
 
 void Window::init()
 {
@@ -27,15 +29,10 @@ void Window::init()
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 
-    window = glfwCreateWindow(width, height, name.c_str(), nullptr, nullptr);
-    if (!window)
+    handle = glfwCreateWindow(width, height, name.c_str(), nullptr, nullptr);
+    if (!handle)
     {
         glfwTerminate();
         throw std::runtime_error("Window not Initialized Correctly.");
     }
-
-    // Get Extensions
-    uint32_t extensionCount = 0;
-    vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
-    std::cout << "[INFO] " << extensionCount << " extensions supported." << std::endl;
 }

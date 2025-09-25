@@ -2,8 +2,12 @@
 
 void App::run()
 {
-    while (!glfwWindowShouldClose(window.window))
+    context.init(window);
+
+    while (!glfwWindowShouldClose(window.getHandle()))
     {
         glfwPollEvents();
     }
+
+    context.cleanup();
 }
