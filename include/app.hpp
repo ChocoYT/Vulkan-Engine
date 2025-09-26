@@ -1,5 +1,5 @@
 #include <GLFW/glfw3.h>
-#include <vulkan/vulkan.hpp>
+#include <vulkan/vulkan.h>
 
 #include "settings.hpp"
 #include "vulkan_context.hpp"
