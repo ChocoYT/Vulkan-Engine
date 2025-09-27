@@ -23,6 +23,8 @@ class VulkanContext
         void init(const Window& window);
         void cleanup();
 
+        VkDebugUtilsMessengerEXT getDebugMessenger() const { return debugMessenger; }
+
         VkInstance       getInstance()       const { return instance;       }
         VkSurfaceKHR     getSurface()        const { return surface;        }
         VkSwapchainKHR   getSwapchain()      const { return swapchain;      }
@@ -31,6 +33,8 @@ class VulkanContext
 
     private:
         // Vulkan Handles
+        VkDebugUtilsMessengerEXT debugMessenger = VK_NULL_HANDLE;
+
         VkInstance       instance        = VK_NULL_HANDLE;
         VkSurfaceKHR     surface         = VK_NULL_HANDLE;
         VkDevice         device          = VK_NULL_HANDLE;
@@ -51,6 +55,7 @@ class VulkanContext
         uint32_t presentQueueFamily  = UINT32_MAX;
 
         // Setup
+        void createDebugCallback();
         void createInstance();
         void createSurface(GLFWwindow* windowHandle);
         void pickPhysicalDevice();

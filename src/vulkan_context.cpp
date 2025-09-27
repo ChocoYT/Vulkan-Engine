@@ -1,10 +1,22 @@
 #include "vulkan_context.hpp"
 
+VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
+    VkDebugUtilsMessageSeverityFlagBitsEXT      messageSeverity,
+    VkDebugUtilsMessageTypeFlagsEXT             messageType,
+    const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
+    void* pUserData
+) {
+    std::cerr << "[VULKAN VALIDATION]\t" << pCallbackData->pMessage << "\n";
+
+    return VK_FALSE;
+}
+
 void VulkanContext::init(const Window &window)
 {
     GLFWwindow* windowHandle = window.getHandle();
     
     createInstance();
+    createDebugCallback();
     createSurface(windowHandle);
 
     pickPhysicalDevice();
@@ -16,6 +28,8 @@ void VulkanContext::init(const Window &window)
 
 void VulkanContext::createInstance()
 {
+    VkResult result = VK_SUCCESS;
+
     // Application Info
     VkApplicationInfo appInfo{};
     appInfo.sType              = VK_STRUCTURE_TYPE_APPLICATION_INFO;
@@ -23,57 +37,99 @@ void VulkanContext::createInstance()
     appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
     appInfo.pEngineName        = ENGINE_NAME.c_str();
     appInfo.engineVersion      = VK_MAKE_VERSION(1, 0, 0);
-    appInfo.apiVersion         = VK_API_VERSION_1_4;
+    appInfo.apiVersion         = VK_API_VERSION_1_3;
 
     // Create Info
     VkInstanceCreateInfo createInfo{};
     createInfo.sType            = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
     createInfo.pApplicationInfo = &appInfo;
-    
-    // Get GLFW Extensions
-    uint32_t glfwExtensionCount = 0;
-    const char** glfwExtensions;
-
-    glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
-
-    createInfo.enabledExtensionCount   = glfwExtensionCount;
-    createInfo.ppEnabledExtensionNames = glfwExtensions;
-    createInfo.enabledLayerCount       = 0;
-
-    VkResult result = vkCreateInstance(&createInfo, nullptr, &instance);
-    if (result != VK_SUCCESS)
-    {
-        throw std::runtime_error("Failed to Create Vulkan Instance.");
-    }
-    std::cout << "[INFO]\tVulkan Instance Created Successfully.\n";
 
     // Get Vulkan Extensions
-    uint32_t extensionCount = 0;
-    vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
+    uint32_t vulkanExtensionCount = 0;
+    vkEnumerateInstanceExtensionProperties(nullptr, &vulkanExtensionCount, nullptr);
 
-    std::vector<VkExtensionProperties> extensions(extensionCount);
-    vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, extensions.data());
+    std::vector<VkExtensionProperties> vulkanExtensions(vulkanExtensionCount);
+    vkEnumerateInstanceExtensionProperties(nullptr, &vulkanExtensionCount, vulkanExtensions.data());
 
     std::cout << "[INFO]\tAvailable Extensions:\n";
+    for (const auto &vulkanExtension : vulkanExtensions)
+        std::cout << "[INFO]\t  " << vulkanExtension.extensionName << '\n';
+    
+    // Extensions
+    uint32_t glfwExtensionCount = 0;
+    const char** glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
 
-    for (const auto& extension : extensions)
+    std::vector<const char*> extensions(glfwExtensions, glfwExtensions + glfwExtensionCount);
+
+    extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+
+    createInfo.enabledExtensionCount   = static_cast<uint32_t>(extensions.size());
+    createInfo.ppEnabledExtensionNames = extensions.data();
+
+    // Layers
+    const std::vector<const char*> layers = {
+        "VK_LAYER_KHRONOS_validation"
+    };
+    createInfo.enabledLayerCount   = static_cast<uint32_t>(layers.size());
+    createInfo.ppEnabledLayerNames = layers.data();
+
+    // Create Instance
+    result = vkCreateInstance(&createInfo, nullptr, &instance);
+    if (result != VK_SUCCESS)
     {
-        std::cout << "[INFO]\t  " << extension.extensionName << '\n';
+        std::cerr << "[ERROR]\t'vkCreateInstance' Failed with Error Code " << result << "\n";
+
+        throw std::runtime_error("Failed to Create Vulkan Instance.");
     }
+    
+    std::cout << "[INFO]\tVulkan Instance Created Successfully.\n";
+}
+
+void VulkanContext::createDebugCallback()
+{
+    VkDebugUtilsMessengerCreateInfoEXT createInfo{};
+    createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+    createInfo.messageSeverity =
+        VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
+        VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
+        VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+    createInfo.messageType =
+        VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
+        VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
+        VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+    createInfo.pfnUserCallback = debugCallback;
+    createInfo.pUserData = nullptr;
+
+    // Load Extension
+    auto func = (PFN_vkCreateDebugUtilsMessengerEXT)
+        vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT");
+
+    if (!func)
+        throw std::runtime_error("Could not load vkCreateDebugUtilsMessengerEXT");
+
+    if (func(instance, &createInfo, nullptr, &debugMessenger) != VK_SUCCESS)
+        throw std::runtime_error("Failed to create Vulkan Debug Callback.");
 }
 
 void VulkanContext::createSurface(GLFWwindow* windowHandle)
 {
-    VkResult result = glfwCreateWindowSurface(instance, windowHandle, nullptr, &surface);
+    VkResult result = VK_SUCCESS;
+    
+    result = glfwCreateWindowSurface(instance, windowHandle, nullptr, &surface);
     if (result != VK_SUCCESS)
     {
+        std::cerr << "[ERROR]\t'glfwCreateWindowSurface' Failed with Error Code " << result << "\n";
+
         throw std::runtime_error("Failed to create Vulkan Surface.");
     }
+    
     std::cout << "[INFO]\tVulkan Surface Created Successfully.\n";
 }
 
 void VulkanContext::createSwapchain(GLFWwindow* windowHandle)
 {
+    VkResult result = VK_SUCCESS;
+
     int width, height;
     glfwGetFramebufferSize(windowHandle, &width, &height);
 
@@ -122,8 +178,11 @@ void VulkanContext::createSwapchain(GLFWwindow* windowHandle)
     createInfo.clipped        = VK_TRUE;
     createInfo.oldSwapchain   = VK_NULL_HANDLE;
 
-    if (vkCreateSwapchainKHR(device, &createInfo, nullptr, &swapchain) != VK_SUCCESS)
+    result = vkCreateSwapchainKHR(device, &createInfo, nullptr, &swapchain);
+    if (result != VK_SUCCESS)
     {
+        std::cerr << "[ERROR]\t'vkCreateSwapchainKHR' Failed with Error Code " << result << "\n";
+
         throw std::runtime_error("Failed to Create Swapchain.");
     }
 
@@ -139,6 +198,8 @@ void VulkanContext::createSwapchain(GLFWwindow* windowHandle)
 
 void VulkanContext::createImageViews()
 {
+    VkResult result = VK_SUCCESS;
+
     swapchainImageViews.resize(swapchainImages.size());
 
     for (size_t i = 0; i < swapchainImages.size(); ++i)
@@ -160,9 +221,11 @@ void VulkanContext::createImageViews()
         createInfo.subresourceRange.baseArrayLayer = 0;
         createInfo.subresourceRange.layerCount = 1;
         
-        VkResult result = vkCreateImageView(device, &createInfo, nullptr, &swapchainImageViews[i]);
+        result = vkCreateImageView(device, &createInfo, nullptr, &swapchainImageViews[i]);
         if (result != VK_SUCCESS)
         {
+            std::cerr << "[ERROR]\t'vkCreateImageView' Failed with Error Code " << result << "\n";
+
             throw std::runtime_error("Failed to Create Image Views.");
         }
     }
@@ -170,9 +233,24 @@ void VulkanContext::createImageViews()
     std::cout << "[INFO]\tSwapchain Image Views Created.\n";
 }
 
-void VulkanContext::cleanup()
-{
-    vkDestroyInstance(instance, nullptr);
+void VulkanContext::cleanup() {
+    for (auto imageView : swapchainImageViews)
+        vkDestroyImageView(device, imageView, nullptr);
+
+    if (swapchain != VK_NULL_HANDLE)
+        vkDestroySwapchainKHR(device, swapchain, nullptr);
+
+    if (device != VK_NULL_HANDLE)
+        vkDestroyDevice(device, nullptr);
+
+    if (surface != VK_NULL_HANDLE)
+        vkDestroySurfaceKHR(instance, surface, nullptr);
+    
+    if (debugMessenger != VK_NULL_HANDLE)
+        vkDestroyDebugUtilsMessengerEXT(instance, debugMessenger, nullptr);
+
+    if (instance != VK_NULL_HANDLE)
+        vkDestroyInstance(instance, nullptr);
 }
 
 bool VulkanContext::isDeviceSuitable(VkPhysicalDevice device)
@@ -213,11 +291,17 @@ void VulkanContext::findQueueFamilies(VkPhysicalDevice device)
 
 void VulkanContext::pickPhysicalDevice()
 {
-    uint32_t deviceCount = 0;
-    vkEnumeratePhysicalDevices(instance, &deviceCount, nullptr);
+    VkResult result = VK_SUCCESS;
 
-    if (deviceCount == 0)
+    uint32_t deviceCount = 0;
+
+    result = vkEnumeratePhysicalDevices(instance, &deviceCount, nullptr);
+    if (deviceCount == 0 || result != VK_SUCCESS)
+    {
+        std::cerr << "[ERROR]\t'vkEnumeratePhysicalDevices' Failed with Error Code " << result << "\n";
+
         throw std::runtime_error("Failed to find GPUs with Vulkan support.");
+    }
 
     std::vector<VkPhysicalDevice> devices(deviceCount);
     vkEnumeratePhysicalDevices(instance, &deviceCount, devices.data());
@@ -237,7 +321,10 @@ void VulkanContext::pickPhysicalDevice()
     std::cout << "[INFO]\tPhysical Device Selected Successfully.\n";
 }
 
-void VulkanContext::createDevice() {
+void VulkanContext::createDevice()
+{
+    VkResult result = VK_SUCCESS;
+
     float queuePriority = 1.0f;
 
     std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
@@ -269,9 +356,13 @@ void VulkanContext::createDevice() {
     createInfo.enabledExtensionCount = static_cast<uint32_t>(deviceExtensions.size());
     createInfo.ppEnabledExtensionNames = deviceExtensions.data();
 
-    VkResult result = vkCreateDevice(physicalDevice, &createInfo, nullptr, &device);
+    result = vkCreateDevice(physicalDevice, &createInfo, nullptr, &device);
     if (result != VK_SUCCESS)
+    {
+        std::cerr << "[ERROR]\t'vkCreateDevice' Failed with Error Code " << result << "\n";
+
         throw std::runtime_error("Failed to Create Logical Device.");
+    }
 
     // Get Handles
     vkGetDeviceQueue(device, graphicsQueueFamily, 0, &graphicsQueue);
