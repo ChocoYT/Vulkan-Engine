@@ -1,6 +1,7 @@
 #include "swapchain_utils.hpp"
 
-SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice device, VkSurfaceKHR surface) {
+SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice device, VkSurfaceKHR surface)
+{
     SwapChainSupportDetails details;
 
     // Capabilities
@@ -27,7 +28,7 @@ SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice device, VkSurface
     return details;
 }
 
-VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats) {
+VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR> &availableFormats) {
     for (const auto& format : availableFormats)
     {
         if (format.format == VK_FORMAT_B8G8R8A8_SRGB &&
@@ -40,18 +41,18 @@ VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>
     return availableFormats[0];
 }
 
-VkPresentModeKHR chooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes) {
+VkPresentModeKHR chooseSwapPresentMode(const std::vector<VkPresentModeKHR> &availablePresentModes)
+{
     for (const auto& mode : availablePresentModes)
     {
         if (mode == VK_PRESENT_MODE_MAILBOX_KHR)
-        {
             return mode;
-        }
     }
     return VK_PRESENT_MODE_FIFO_KHR;
 }
 
-VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities, int windowWidth, int windowHeight) {
+VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR &capabilities, int windowWidth, int windowHeight)
+{
     if (capabilities.currentExtent.width != UINT32_MAX)
     {
         return capabilities.currentExtent;

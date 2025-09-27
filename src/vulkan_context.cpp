@@ -56,7 +56,8 @@ void VulkanContext::createInstance()
 
     std::cout << "[INFO]\tAvailable Extensions:\n";
 
-    for (const auto& extension : extensions) {
+    for (const auto& extension : extensions)
+    {
         std::cout << "[INFO]\t  " << extension.extensionName << '\n';
     }
 }
@@ -89,6 +90,7 @@ void VulkanContext::createSwapchain(GLFWwindow* windowHandle)
         imageCount = swapChainSupport.capabilities.maxImageCount;
     }
 
+    // Create Info
     VkSwapchainCreateInfoKHR createInfo{};
     createInfo.sType            = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
     createInfo.surface          = surface;
@@ -139,7 +141,8 @@ void VulkanContext::createImageViews()
 {
     swapchainImageViews.resize(swapchainImages.size());
 
-    for (size_t i = 0; i < swapchainImages.size(); ++i) {
+    for (size_t i = 0; i < swapchainImages.size(); ++i)
+    {
         VkImageViewCreateInfo createInfo{};
         createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
         createInfo.image = swapchainImages[i];
@@ -191,24 +194,19 @@ void VulkanContext::findQueueFamilies(VkPhysicalDevice device)
     vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies.data());
 
     int i = 0;
-    for (const auto& queueFamily : queueFamilies)
+    for (const auto &queueFamily : queueFamilies)
     {
         if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)
-        {
             graphicsQueueFamily = i;
-        }
 
         VkBool32 presentSupport = false;
         vkGetPhysicalDeviceSurfaceSupportKHR(device, i, surface, &presentSupport);
         if (presentSupport)
-        {
             presentQueueFamily = i;
-        }
 
         if (graphicsQueueFamily != UINT32_MAX && presentQueueFamily != UINT32_MAX)
-        {
             break;
-        }
+        
         ++i;
     }
 }
@@ -219,14 +217,12 @@ void VulkanContext::pickPhysicalDevice()
     vkEnumeratePhysicalDevices(instance, &deviceCount, nullptr);
 
     if (deviceCount == 0)
-    {
         throw std::runtime_error("Failed to find GPUs with Vulkan support.");
-    }
 
     std::vector<VkPhysicalDevice> devices(deviceCount);
     vkEnumeratePhysicalDevices(instance, &deviceCount, devices.data());
 
-    for (const auto& deviceCandidate : devices)
+    for (const auto &deviceCandidate : devices)
     {
         if (isDeviceSuitable(deviceCandidate))
         {
@@ -236,10 +232,8 @@ void VulkanContext::pickPhysicalDevice()
     }
 
     if (physicalDevice == VK_NULL_HANDLE)
-    {
         throw std::runtime_error("Failed to find a Suitable GPU.");
-    }
-
+    
     std::cout << "[INFO]\tPhysical Device Selected Successfully.\n";
 }
 
@@ -277,9 +271,7 @@ void VulkanContext::createDevice() {
 
     VkResult result = vkCreateDevice(physicalDevice, &createInfo, nullptr, &device);
     if (result != VK_SUCCESS)
-    {
         throw std::runtime_error("Failed to Create Logical Device.");
-    }
 
     // Get Handles
     vkGetDeviceQueue(device, graphicsQueueFamily, 0, &graphicsQueue);
