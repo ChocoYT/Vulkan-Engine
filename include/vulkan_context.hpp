@@ -56,6 +56,7 @@ class VulkanContext
         void pickPhysicalDevice();
         void createDevice();
         void createSwapchain(GLFWwindow* windowHandle);
+        void createImageViews();
 
         // Helpers
         bool isDeviceSuitable(VkPhysicalDevice device);
