@@ -100,14 +100,13 @@ void VulkanContext::createDebugCallback()
     createInfo.pfnUserCallback = debugCallback;
     createInfo.pUserData = nullptr;
 
-    // Load Extension
-    auto func = (PFN_vkCreateDebugUtilsMessengerEXT)
+    // Load Extensions
+    auto funcCreateDebugMessenger = (PFN_vkCreateDebugUtilsMessengerEXT)
         vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT");
-
-    if (!func)
+    
+    if (!funcCreateDebugMessenger)
         throw std::runtime_error("Could not load vkCreateDebugUtilsMessengerEXT");
-
-    if (func(instance, &createInfo, nullptr, &debugMessenger) != VK_SUCCESS)
+    if (funcCreateDebugMessenger(instance, &createInfo, nullptr, &debugMessenger) != VK_SUCCESS)
         throw std::runtime_error("Failed to create Vulkan Debug Callback.");
 }
 
@@ -234,21 +233,30 @@ void VulkanContext::createImageViews()
 }
 
 void VulkanContext::cleanup() {
+    // Destroy ImageViews
     for (auto imageView : swapchainImageViews)
         vkDestroyImageView(device, imageView, nullptr);
 
+    // Destroy Swapchain
     if (swapchain != VK_NULL_HANDLE)
         vkDestroySwapchainKHR(device, swapchain, nullptr);
 
+    // Destroy Device
     if (device != VK_NULL_HANDLE)
         vkDestroyDevice(device, nullptr);
 
+    // Destroy Surface
     if (surface != VK_NULL_HANDLE)
         vkDestroySurfaceKHR(instance, surface, nullptr);
-    
-    if (debugMessenger != VK_NULL_HANDLE)
-        vkDestroyDebugUtilsMessengerEXT(instance, debugMessenger, nullptr);
 
+    // Destroy Debug Messenger
+    auto funcDestroyDebugMessenger = (PFN_vkDestroyDebugUtilsMessengerEXT)
+        vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
+
+    if (funcDestroyDebugMessenger && debugMessenger != VK_NULL_HANDLE)
+        funcDestroyDebugMessenger(instance, debugMessenger, nullptr);
+
+    // Destroy Instance
     if (instance != VK_NULL_HANDLE)
         vkDestroyInstance(instance, nullptr);
 }
