@@ -1,10 +1,9 @@
+#pragma once
+
 #include <GLFW/glfw3.h>
 
 #include <iostream>
 #include <string>
-
-#ifndef WINDOW_HPP
-#define WINDOW_HPP
 
 class Window
 {
@@ -23,5 +22,3 @@ class Window
     private:
         void init();
 };
-
-#endif

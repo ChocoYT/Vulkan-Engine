@@ -1,3 +1,5 @@
+#pragma once
+
 #include <vulkan/vulkan.h>
 
 #include <iostream>
@@ -6,9 +8,6 @@
 
 #include "utils.hpp"
 #include "vulkan_context.hpp"
-
-#ifndef VULKAN_PIPELINE_HPP
-#define VULKAN_PIPELINE_HPP
 
 class VulkanPipeline
 {
@@ -51,5 +50,3 @@ class VulkanPipeline
 
         VulkanContext *context;
 };
-
-#endif

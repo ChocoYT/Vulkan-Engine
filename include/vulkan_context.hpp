@@ -1,3 +1,5 @@
+#pragma once
+
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 #include <vulkan/vulkan.h>
@@ -11,9 +13,6 @@
 #include "settings.hpp"
 #include "swapchain_utils.hpp"
 #include "window.hpp"
-
-#ifndef VULKAN_CONTEXT_HPP
-#define VULKAN_CONTEXT_HPP
 
 class Window;
 
@@ -98,5 +97,3 @@ class VulkanContext
         bool isDeviceSuitable(VkPhysicalDevice device);
         void findQueueFamilies(VkPhysicalDevice device);
 };
-
-#endif

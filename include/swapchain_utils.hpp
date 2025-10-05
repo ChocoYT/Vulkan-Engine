@@ -1,10 +1,9 @@
+#pragma once
+
 #include <vulkan/vulkan.h>
 
 #include <algorithm>
 #include <vector>
-
-#ifndef SWAPCHAIN_UTILS_HPP
-#define SWAPCHAIN_UTILS_HPP
 
 struct SwapChainSupportDetails
 {
@@ -19,5 +18,3 @@ VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>
 VkPresentModeKHR   chooseSwapPresentMode(const std::vector<VkPresentModeKHR> &availablePresentModes);
 
 VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR &capabilities, int windowWidth, int windowHeight);
-
-#endif
