@@ -23,7 +23,54 @@ void VulkanContext::init(const Window &window)
     createDevice();
 
     createSwapchain(windowHandle);
+    createRenderPass();
     createImageViews();
+    createFramebuffers();
+    
+    createCommandPool();
+    createCommandBuffers();
+}
+
+void VulkanContext::cleanup()
+{
+    // Destroy Command Pool
+    if (commandPool != VK_NULL_HANDLE)
+        vkDestroyCommandPool(device, commandPool, nullptr);
+    
+    // Destroy Frame Buffers
+    for (auto framebuffer : swapchainFramebuffers)
+        vkDestroyFramebuffer(device, framebuffer, nullptr);
+
+    // Destroy Image Views
+    for (auto imageView : swapchainImageViews)
+        vkDestroyImageView(device, imageView, nullptr);
+
+    // Destroy Render Pass
+    if (renderPass != VK_NULL_HANDLE)
+        vkDestroyRenderPass(device, renderPass, nullptr);
+
+    // Destroy Swapchain
+    if (swapchain != VK_NULL_HANDLE)
+        vkDestroySwapchainKHR(device, swapchain, nullptr);
+
+    // Destroy Device
+    if (device != VK_NULL_HANDLE)
+        vkDestroyDevice(device, nullptr);
+
+    // Destroy Surface
+    if (surface != VK_NULL_HANDLE)
+        vkDestroySurfaceKHR(instance, surface, nullptr);
+
+    // Destroy Debug Messenger
+    auto funcDestroyDebugMessenger = (PFN_vkDestroyDebugUtilsMessengerEXT)
+        vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
+
+    if (funcDestroyDebugMessenger && debugMessenger != VK_NULL_HANDLE)
+        funcDestroyDebugMessenger(instance, debugMessenger, nullptr);
+
+    // Destroy Instance
+    if (instance != VK_NULL_HANDLE)
+        vkDestroyInstance(instance, nullptr);
 }
 
 void VulkanContext::createInstance()
@@ -138,7 +185,7 @@ void VulkanContext::createSwapchain(GLFWwindow* windowHandle)
     VkPresentModeKHR   presentMode   = chooseSwapPresentMode(swapChainSupport.presentModes);
     VkExtent2D         extent        = chooseSwapExtent(swapChainSupport.capabilities, width, height);
 
-    uint32_t imageCount = swapChainSupport.capabilities.minImageCount + 1;
+    uint32_t imageCount = FRAMES_IN_FLIGHT;
     if (swapChainSupport.capabilities.maxImageCount > 0 &&
         imageCount > swapChainSupport.capabilities.maxImageCount)
     {
@@ -192,7 +239,7 @@ void VulkanContext::createSwapchain(GLFWwindow* windowHandle)
     swapchainFormat = surfaceFormat.format;
     swapchainExtent = extent;
 
-    std::cout << "[INFO]\tSwapchain Created with " << imageCount << " Images.\n";
+    std::cout << "[INFO]\tSwapchain Created Successfully with " << imageCount << " Images.\n";
 }
 
 void VulkanContext::createImageViews()
@@ -229,36 +276,81 @@ void VulkanContext::createImageViews()
         }
     }
 
-    std::cout << "[INFO]\tSwapchain Image Views Created.\n";
+    std::cout << "[INFO]\tSwapchain Image Views Created Successfully.\n";
 }
 
-void VulkanContext::cleanup() {
-    // Destroy ImageViews
-    for (auto imageView : swapchainImageViews)
-        vkDestroyImageView(device, imageView, nullptr);
+void VulkanContext::createRenderPass()
+{
+    VkResult result = VK_SUCCESS;
 
-    // Destroy Swapchain
-    if (swapchain != VK_NULL_HANDLE)
-        vkDestroySwapchainKHR(device, swapchain, nullptr);
+    VkAttachmentDescription colorAttachment{};
+    colorAttachment.format         = swapchainFormat;
+    colorAttachment.samples        = VK_SAMPLE_COUNT_1_BIT;
+    colorAttachment.loadOp         = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    colorAttachment.storeOp        = VK_ATTACHMENT_STORE_OP_STORE;
+    colorAttachment.stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    colorAttachment.initialLayout  = VK_IMAGE_LAYOUT_UNDEFINED;
+    colorAttachment.finalLayout    = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 
-    // Destroy Device
-    if (device != VK_NULL_HANDLE)
-        vkDestroyDevice(device, nullptr);
+    VkAttachmentReference colorAttachmentRef{};
+    colorAttachmentRef.attachment = 0;
+    colorAttachmentRef.layout     = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
-    // Destroy Surface
-    if (surface != VK_NULL_HANDLE)
-        vkDestroySurfaceKHR(instance, surface, nullptr);
+    VkSubpassDescription subpass{};
+    subpass.pipelineBindPoint    = VK_PIPELINE_BIND_POINT_GRAPHICS;
+    subpass.colorAttachmentCount = 1;
+    subpass.pColorAttachments    = &colorAttachmentRef;
 
-    // Destroy Debug Messenger
-    auto funcDestroyDebugMessenger = (PFN_vkDestroyDebugUtilsMessengerEXT)
-        vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
+    VkRenderPassCreateInfo renderPassInfo{};
+    renderPassInfo.sType           = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+    renderPassInfo.attachmentCount = 1;
+    renderPassInfo.pAttachments    = &colorAttachment;
+    renderPassInfo.subpassCount    = 1;
+    renderPassInfo.pSubpasses      = &subpass;
 
-    if (funcDestroyDebugMessenger && debugMessenger != VK_NULL_HANDLE)
-        funcDestroyDebugMessenger(instance, debugMessenger, nullptr);
+    result = vkCreateRenderPass(device, &renderPassInfo, nullptr, &renderPass);
+    if (result != VK_SUCCESS)
+    {
+        std::cerr << "[ERROR]\t'vkCreateRenderPass' Failed with Error Code " << result << "\n";
 
-    // Destroy Instance
-    if (instance != VK_NULL_HANDLE)
-        vkDestroyInstance(instance, nullptr);
+        throw std::runtime_error("Failed to Create Render Pass.");
+    }
+
+    std::cout << "[INFO]\tRender Pass Created Successfully.\n";
+}
+
+void VulkanContext::createFramebuffers()
+{
+    VkResult result = VK_SUCCESS;
+
+    swapchainFramebuffers.resize(swapchainImageViews.size());
+
+    for (size_t i = 0; i < swapchainImageViews.size(); ++i)
+    {
+        VkImageView attachments[] = {
+            swapchainImageViews[i]
+        };
+
+        VkFramebufferCreateInfo framebufferInfo{};
+        framebufferInfo.sType           = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+        framebufferInfo.renderPass      = renderPass;
+        framebufferInfo.attachmentCount = 1;
+        framebufferInfo.pAttachments    = attachments;
+        framebufferInfo.width           = swapchainExtent.width;
+        framebufferInfo.height          = swapchainExtent.height;
+        framebufferInfo.layers          = 1;
+
+        result = vkCreateFramebuffer(device, &framebufferInfo, nullptr, &swapchainFramebuffers[i]);
+        if (result != VK_SUCCESS)
+        {
+            std::cerr << "[ERROR]\t'vkCreateFramebuffer' Failed with Error Code " << result << "\n";
+
+            throw std::runtime_error("Failed to Create Framebuffers.");
+        }
+    }
+
+    std::cout << "[INFO]\tSwapchain Framebuffers Created Successfully.\n";
 }
 
 bool VulkanContext::isDeviceSuitable(VkPhysicalDevice device)
@@ -375,4 +467,69 @@ void VulkanContext::createDevice()
     // Get Handles
     vkGetDeviceQueue(device, graphicsQueueFamily, 0, &graphicsQueue);
     vkGetDeviceQueue(device, presentQueueFamily, 0, &presentQueue);
+
+    std::cout << "[INFO]\tLogical Device Created Successfully.\n";
+}
+
+void VulkanContext::createCommandPool()
+{
+    VkResult result = VK_SUCCESS;
+
+    VkCommandPoolCreateInfo poolInfo{};
+    poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    poolInfo.queueFamilyIndex = graphicsQueueFamily;
+    poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+
+    result = vkCreateCommandPool(device, &poolInfo, nullptr, &commandPool);
+    if (result != VK_SUCCESS)
+    {
+        std::cerr << "[ERROR]\t'vkCreateCommandPool' Failed with Error Code " << result << "\n";
+
+        throw std::runtime_error("Failed to Create Command Pool.");
+    }
+
+    std::cout << "[INFO]\tCommand Pool Created Successfully.\n";
+}
+
+void VulkanContext::createCommandBuffers()
+{
+    commandBuffers.resize(FRAMES_IN_FLIGHT);
+
+    VkCommandBufferAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    allocInfo.commandPool = commandPool;
+    allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    allocInfo.commandBufferCount = FRAMES_IN_FLIGHT;
+
+    VkResult result = vkAllocateCommandBuffers(device, &allocInfo, commandBuffers.data());
+    if (result != VK_SUCCESS)
+    {
+        std::cerr << "[ERROR]\t'vkAllocateCommandBuffers' Failed with Error Code " << result << "\n";
+
+        throw std::runtime_error("Failed to allocate command buffers.");
+    }
+
+    std::cout << "[INFO]\tCommand Buffers Allocated Successfully.\n";
+}
+
+VkCommandBuffer VulkanContext::beginFrame(int currentFrame)
+{
+    VkResult result = VK_SUCCESS;
+
+    VkCommandBuffer commandBuffer = commandBuffers[currentFrame];
+    vkResetCommandBuffer(commandBuffer, 0);
+
+    VkCommandBufferBeginInfo beginInfo{};
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
+
+    result = vkBeginCommandBuffer(commandBuffer, &beginInfo);
+    if (result != VK_SUCCESS)
+    {
+        std::cerr << "[ERROR]\t'vkBeginCommandBuffer' Failed with Error Code " << result << "\n";
+
+        throw std::runtime_error("Failed to Begin Command Buffer.");
+    }
+
+    return commandBuffer;
 }
