@@ -1,6 +1,7 @@
 struct PixelInputType
 {
     float4 position : SV_Position;
+    float3 color    : COLOR;
 };
 
 struct PixelOutput
@@ -8,10 +9,10 @@ struct PixelOutput
     float4 color : SV_Target;
 };
 
-PixelOutput main()
+PixelOutput main(PixelInputType input)
 {
     PixelOutput output;
-    output.color = float4(1.0f, 0.0f, 0.0f, 1.0f);
+    output.color = float4(input.color, 1.0);
     
     return output;
 }

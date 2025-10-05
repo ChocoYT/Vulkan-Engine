@@ -2,18 +2,22 @@
 
 #include <vulkan/vulkan.h>
 
+#include <array>
 #include <iostream>
 #include <stdexcept>
 #include <string>
 
+#include "mesh.hpp"
 #include "utils.hpp"
 #include "vulkan_context.hpp"
 
 class VulkanPipeline
 {
     public:
-        void init(VulkanContext &vulkanContext);
+        void init(VulkanContext &vulkanContext, std::vector<VkVertexInputBindingDescription> &bindingDescs, std::vector<VkVertexInputAttributeDescription> &attrDescs);
         void cleanup();
+
+        void bind(VkCommandBuffer commandBuffer);
 
         uint32_t beginFrame(VkCommandBuffer commandBuffer, int currentFrame);
         void     endFrame(VkCommandBuffer commandBuffer, uint32_t imageIndex, int currentFrame);
@@ -29,13 +33,20 @@ class VulkanPipeline
         const std::vector<VkSemaphore>& getRenderFinishedSemaphores() const { return renderFinishedSemaphores; }
         const std::vector<VkFence>&     getInFlightFences()           const { return inFlightFences;           }
 
+    private:
+        // Pipeline
         VkPipeline       graphicsPipeline       = VK_NULL_HANDLE;
         VkPipelineLayout graphicsPipelineLayout = VK_NULL_HANDLE;
 
+        // Descriptions
+        std::vector<VkVertexInputBindingDescription>   *bindingDescs;
+        std::vector<VkVertexInputAttributeDescription> *attrDescs;
+
+        // Shader Modules
         VkShaderModule vertexShaderModule = VK_NULL_HANDLE;
         VkShaderModule pixelShaderModule  = VK_NULL_HANDLE;
 
-    private:
+        // Synchronization
         std::vector<VkSemaphore> imageAvailableSemaphores;
         std::vector<VkSemaphore> renderFinishedSemaphores;
         std::vector<VkFence>     inFlightFences;

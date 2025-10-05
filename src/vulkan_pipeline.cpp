@@ -1,8 +1,11 @@
 #include "vulkan_pipeline.hpp"
 
-void VulkanPipeline::init(VulkanContext &vulkanContext)
+void VulkanPipeline::init(VulkanContext &vulkanContext, std::vector<VkVertexInputBindingDescription> &bindingDescs, std::vector<VkVertexInputAttributeDescription> &attrDescs)
 {
     context = &vulkanContext;
+
+    this->bindingDescs = &bindingDescs;
+    this->attrDescs    = &attrDescs;
 
     vertexShaderModule = createShaderModule("shaders/renderVS.spv");
     pixelShaderModule  = createShaderModule("shaders/renderPS.spv");
@@ -37,6 +40,11 @@ void VulkanPipeline::cleanup()
     // Destroy Graphics Pipeline
     if (graphicsPipeline != VK_NULL_HANDLE)
         vkDestroyPipeline(context->getDevice(), graphicsPipeline, nullptr);
+}
+
+void VulkanPipeline::bind(VkCommandBuffer commandBuffer)
+{
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
 }
 
 uint32_t VulkanPipeline::beginFrame(VkCommandBuffer commandBuffer, int currentFrame)
@@ -92,7 +100,7 @@ void VulkanPipeline::endFrame(VkCommandBuffer commandBuffer, uint32_t imageIndex
     VkSubmitInfo submitInfo{};
     submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 
-    VkSemaphore waitSemaphores[]     = { imageAvailableSemaphore };
+    VkSemaphore waitSemaphores[]      = { imageAvailableSemaphore };
     VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
     submitInfo.waitSemaphoreCount    = 1;
     submitInfo.pWaitSemaphores       = waitSemaphores;
@@ -133,10 +141,10 @@ void VulkanPipeline::createGraphicsPipeline()
     // Vertex Input
     VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
     vertexInputInfo.sType                           = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-    vertexInputInfo.vertexBindingDescriptionCount   = 0;
-    vertexInputInfo.pVertexBindingDescriptions      = nullptr;
-    vertexInputInfo.vertexAttributeDescriptionCount = 0;
-    vertexInputInfo.pVertexAttributeDescriptions    = nullptr;
+    vertexInputInfo.vertexBindingDescriptionCount   = static_cast<uint32_t>(bindingDescs->size());
+    vertexInputInfo.pVertexBindingDescriptions      = bindingDescs->data();
+    vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attrDescs->size());
+    vertexInputInfo.pVertexAttributeDescriptions    = attrDescs->data();
 
     // Input Assembly
     VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
@@ -324,7 +332,7 @@ VkFence VulkanPipeline::createFence(VkFenceCreateFlags flags)
 
     VkFenceCreateInfo fenceInfo{};
     fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-    fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+    fenceInfo.flags = flags;
 
     VkFence fence = VK_NULL_HANDLE;
 
@@ -335,6 +343,8 @@ VkFence VulkanPipeline::createFence(VkFenceCreateFlags flags)
 
         throw std::runtime_error("Failed to Create Fence.");
     }
+
+    std::cout << "[INFO]\tFence Created Successfully.\n";
 
     return fence;
 }

@@ -5,9 +5,11 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 # Initialize Directories
-set(SOURCE_DIRECTORY  ${PROJECT_SOURCE_DIR}/src)
-set(INCLUDE_DIRECTORY ${PROJECT_SOURCE_DIR}/include)
-set(INSTALL_DIRECTORY ${PROJECT_SOURCE_DIR}/install)
+set(SOURCE_DIRECTORY   ${PROJECT_SOURCE_DIR}/src)
+set(INCLUDE_DIRECTORY  ${PROJECT_SOURCE_DIR}/include)
+set(EXTERNAL_DIRECTORY ${PROJECT_SOURCE_DIR}/external)
+set(SHADER_DIRECTORY   ${PROJECT_SOURCE_DIR}/shaders)
+set(INSTALL_DIRECTORY  ${PROJECT_SOURCE_DIR}/install)
 
 # ----------
 # Find Files
@@ -67,17 +69,41 @@ target_link_libraries(${PROJECT_NAME} glfw)
 target_include_directories(${PROJECT_NAME} PRIVATE external/GLFW/include)
 
 # GLM
-target_include_directories(${PROJECT_NAME} PRIVATE external/GLM/include)
+target_include_directories(${PROJECT_NAME} PRIVATE ${EXTERNAL_DIRECTORY}/glm/include)
 
 # ----------
-# Copy Files
+# Compile Shaders
 # ----------
 
-# Shaders
-set(SHADER_DIRECTORY ${PROJECT_SOURCE_DIR}/shaders)
+set(SHADER_DIRECTORY ${CMAKE_SOURCE_DIR}/shaders)
+set(SPIRV_OUTPUT_DIR ${INSTALL_DIRECTORY}/$<CONFIG>/shaders)
 
-add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-        ${SHADER_DIRECTORY}
-        $<TARGET_FILE_DIR:${PROJECT_NAME}>/shaders
-)
+file(GLOB HLSL_SHADERS ${SHADER_DIRECTORY}/*.hlsl)
+
+set(SPIRV_SHADERS "")
+
+foreach(SHADER ${HLSL_SHADERS})
+    get_filename_component(SHADER_NAME ${SHADER} NAME_WE)
+
+    if(SHADER_NAME MATCHES ".*VS.*")
+        set(TARGET_PROFILE "vs_6_0")
+    elseif(SHADER_NAME MATCHES ".*PS.*")
+        set(TARGET_PROFILE "ps_6_0")
+    else()
+        message(FATAL_ERROR "Unknown shader stage for ${SHADER_NAME}, must contain VS or PS")
+    endif()
+    
+    set(OUT_FILE "${SPIRV_OUTPUT_DIR}/${SHADER_NAME}.spv")
+
+    add_custom_command(
+        OUTPUT ${OUT_FILE}
+        COMMAND $ENV{VK_SDK_PATH}/Bin/dxc.exe -T ${TARGET_PROFILE} -E main -Fo ${OUT_FILE} ${SHADER} -spirv
+        DEPENDS ${SHADER}
+        COMMENT "Compiling ${SHADER} to SPIR-V (${TARGET_PROFILE})"
+        VERBATIM
+    )
+
+    list(APPEND SPIRV_SHADERS ${OUT_FILE})
+endforeach()
+
+add_custom_target(Shaders ALL DEPENDS ${SPIRV_SHADERS})

@@ -22,9 +22,12 @@ class VulkanContext
         void init(const Window& window);
         void cleanup();
 
-        VkDebugUtilsMessengerEXT getDebugMessenger() const { return debugMessenger; }
+        // Command Buffer
+        VkCommandBuffer beginFrame(int currentFrame);
 
         // Core Vulkan Object Getters
+        VkDebugUtilsMessengerEXT getDebugMessenger() const { return debugMessenger; }
+
         VkInstance       getInstance()       const { return instance;       }
         VkSurfaceKHR     getSurface()        const { return surface;        }
         VkSwapchainKHR   getSwapchain()      const { return swapchain;      }
@@ -44,13 +47,12 @@ class VulkanContext
         // Swapchain State
         VkFormat   getSwapchainImageFormat() const { return swapchainFormat; }
         VkExtent2D getSwapchainExtent()      const { return swapchainExtent; }
-        
-        // Command Buffer
-        VkCommandBuffer beginFrame(int currentFrame);
 
-        VkCommandPool commandPool = VK_NULL_HANDLE;
-        std::vector<VkCommandBuffer> commandBuffers;
+        // Command Pool and Buffer Getters
+        VkCommandPool getCommandPool()                   const { return commandPool;    }
+        std::vector<VkCommandBuffer> getCommandBuffers() const { return commandBuffers; }
 
+    private:
         // Core Vulkan Objects
         VkDebugUtilsMessengerEXT debugMessenger = VK_NULL_HANDLE;
 
@@ -67,8 +69,8 @@ class VulkanContext
         std::vector<VkFramebuffer> swapchainFramebuffers;
 
         // Queues
-        VkQueue  graphicsQueue = VK_NULL_HANDLE;
-        VkQueue  presentQueue  = VK_NULL_HANDLE;
+        VkQueue graphicsQueue = VK_NULL_HANDLE;
+        VkQueue presentQueue  = VK_NULL_HANDLE;
 
         uint32_t graphicsQueueFamily = UINT32_MAX;
         uint32_t presentQueueFamily  = UINT32_MAX;
@@ -77,7 +79,10 @@ class VulkanContext
         VkFormat   swapchainFormat = VK_FORMAT_UNDEFINED;
         VkExtent2D swapchainExtent{0, 0};
 
-    private:
+        // Command Pool and Buffers
+        VkCommandPool commandPool = VK_NULL_HANDLE;
+        std::vector<VkCommandBuffer> commandBuffers;
+
         // Setup
         void createInstance();
         void createDebugCallback();
