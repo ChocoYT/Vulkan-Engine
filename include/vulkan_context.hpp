@@ -19,7 +19,7 @@ class Window;
 class VulkanContext
 {
     public:
-        void init(const Window& window);
+        void init(Window& window);
         void cleanup();
 
         // Command Buffer
@@ -49,8 +49,11 @@ class VulkanContext
         VkExtent2D getSwapchainExtent()      const { return swapchainExtent; }
 
         // Command Pool and Buffer Getters
-        VkCommandPool getCommandPool()                   const { return commandPool;    }
+        VkCommandPool                getCommandPool()    const { return commandPool;    }
         std::vector<VkCommandBuffer> getCommandBuffers() const { return commandBuffers; }
+
+        // Descriptor Pool
+        VkDescriptorPool getDescriptorPool() const { return descriptorPool; }
 
     private:
         // Core Vulkan Objects
@@ -83,6 +86,9 @@ class VulkanContext
         VkCommandPool commandPool = VK_NULL_HANDLE;
         std::vector<VkCommandBuffer> commandBuffers;
 
+        // Descriptor Pool
+        VkDescriptorPool descriptorPool = VK_NULL_HANDLE;
+
         // Setup
         void createInstance();
         void createDebugCallback();
@@ -95,8 +101,11 @@ class VulkanContext
         void createRenderPass();
         void createImageViews();
         void createFramebuffers();
+
         void createCommandPool();
         void createCommandBuffers();
+
+        void createDescriptorPool();
 
         // Helpers
         bool isDeviceSuitable(VkPhysicalDevice device);

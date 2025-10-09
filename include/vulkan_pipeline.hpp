@@ -14,7 +14,12 @@
 class VulkanPipeline
 {
     public:
-        void init(VulkanContext &vulkanContext, std::vector<VkVertexInputBindingDescription> &bindingDescs, std::vector<VkVertexInputAttributeDescription> &attrDescs);
+        void init(
+            VulkanContext &vulkanContext,
+            std::vector<VkVertexInputBindingDescription>   &bindingDescs,
+            std::vector<VkVertexInputAttributeDescription> &attrDescs,
+            std::vector<VkDescriptorSetLayout>             &layoutDescs
+        );
         void cleanup();
 
         void bind(VkCommandBuffer commandBuffer);
@@ -39,8 +44,9 @@ class VulkanPipeline
         VkPipelineLayout graphicsPipelineLayout = VK_NULL_HANDLE;
 
         // Descriptions
-        std::vector<VkVertexInputBindingDescription>   *bindingDescs;
-        std::vector<VkVertexInputAttributeDescription> *attrDescs;
+        std::vector<VkVertexInputBindingDescription>   bindingDescs;
+        std::vector<VkVertexInputAttributeDescription> attrDescs;
+        std::vector<VkDescriptorSetLayout>             layoutDescs;
 
         // Shader Modules
         VkShaderModule vertexShaderModule = VK_NULL_HANDLE;

@@ -2,11 +2,17 @@
 
 #include <vulkan/vulkan.h>
 
+#include <chrono>
+#include <thread>
+
+#include "camera.hpp"
 #include "mesh.hpp"
 #include "settings.hpp"
 #include "vulkan_context.hpp"
 #include "vulkan_pipeline.hpp"
 #include "window.hpp"
+
+#include "Buffers/uniform_buffer.hpp"
 
 class App
 {
@@ -14,8 +20,7 @@ class App
         void run();
 
     private:
+        Window         window;
         VulkanContext  context;
         VulkanPipeline pipeline;
-        
-        Window window{SCREEN_WIDTH, SCREEN_HEIGHT, SCREEN_NAME};
 };

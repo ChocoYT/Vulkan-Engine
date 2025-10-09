@@ -11,28 +11,34 @@ VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
     return VK_FALSE;
 }
 
-void VulkanContext::init(const Window &window)
+void VulkanContext::init(Window &window)
 {
     GLFWwindow* windowHandle = window.getHandle();
     
     createInstance();
     createDebugCallback();
-    createSurface(windowHandle);
+    createSurface(window.getHandle());
 
     pickPhysicalDevice();
     createDevice();
 
-    createSwapchain(windowHandle);
+    createSwapchain(window.getHandle());
     createRenderPass();
     createImageViews();
     createFramebuffers();
     
     createCommandPool();
     createCommandBuffers();
+
+    createDescriptorPool();
 }
 
 void VulkanContext::cleanup()
 {
+    // Destroy Descriptor Pool
+    if (descriptorPool != VK_NULL_HANDLE)
+        vkDestroyDescriptorPool(device, descriptorPool, nullptr);
+
     // Destroy Command Pool
     if (commandPool != VK_NULL_HANDLE)
         vkDestroyCommandPool(device, commandPool, nullptr);
@@ -471,6 +477,29 @@ void VulkanContext::createDevice()
     std::cout << "[INFO]\tLogical Device Created Successfully.\n";
 }
 
+VkCommandBuffer VulkanContext::beginFrame(int currentFrame)
+{
+    VkResult result = VK_SUCCESS;
+
+    VkCommandBuffer commandBuffer = commandBuffers[currentFrame];
+    vkResetCommandBuffer(commandBuffer, 0);
+
+    VkCommandBufferBeginInfo beginInfo{};
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
+
+    result = vkBeginCommandBuffer(commandBuffer, &beginInfo);
+    if (result != VK_SUCCESS)
+    {
+        std::cerr << "[ERROR]\t'vkBeginCommandBuffer' Failed with Error Code " << result << "\n";
+
+        throw std::runtime_error("Failed to Begin Command Buffer.");
+    }
+
+    return commandBuffer;
+}
+
+
 void VulkanContext::createCommandPool()
 {
     VkResult result = VK_SUCCESS;
@@ -512,24 +541,27 @@ void VulkanContext::createCommandBuffers()
     std::cout << "[INFO]\tCommand Buffers Allocated Successfully.\n";
 }
 
-VkCommandBuffer VulkanContext::beginFrame(int currentFrame)
+void VulkanContext::createDescriptorPool()
 {
     VkResult result = VK_SUCCESS;
 
-    VkCommandBuffer commandBuffer = commandBuffers[currentFrame];
-    vkResetCommandBuffer(commandBuffer, 0);
+    std::vector<VkDescriptorPoolSize> poolSizes(1);
+    poolSizes[0].type            = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    poolSizes[0].descriptorCount = static_cast<uint32_t>(swapchainImages.size());
 
-    VkCommandBufferBeginInfo beginInfo{};
-    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
+    VkDescriptorPoolCreateInfo poolInfo{};
+    poolInfo.sType         = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
+    poolInfo.pPoolSizes    = poolSizes.data();
+    poolInfo.maxSets       = static_cast<uint32_t>(swapchainImages.size());
 
-    result = vkBeginCommandBuffer(commandBuffer, &beginInfo);
+    result = vkCreateDescriptorPool(device, &poolInfo, nullptr, &descriptorPool);
     if (result != VK_SUCCESS)
     {
-        std::cerr << "[ERROR]\t'vkBeginCommandBuffer' Failed with Error Code " << result << "\n";
+        std::cerr << "[ERROR]\t'vkCreateDescriptorPool' Failed with Error Code " << result << "\n";
 
-        throw std::runtime_error("Failed to Begin Command Buffer.");
+        throw std::runtime_error("Failed to Create Descriptor Pool.");
     }
 
-    return commandBuffer;
+    std::cout << "[INFO]\tDescriptor Pool Created Successfully.\n";
 }

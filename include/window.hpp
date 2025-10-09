@@ -8,17 +8,20 @@
 class Window
 {
     public:
-        Window(int width, int height, std::string name);
-        ~Window();
+        void init(int width, int height, const std::string &name);
+        void cleanup();
 
-        GLFWwindow* getHandle() const;
+        // Getters
+        int getWidth()  const { return width;  }
+        int getHeight() const { return height; }
+        const std::string& getName() const { return *name; }
 
-        int width;
-        int height;
-        std::string name;
-
-        GLFWwindow *handle;
+        GLFWwindow* getHandle() const { return handle; }
 
     private:
-        void init();
+        int width;
+        int height;
+        const std::string* name = nullptr;
+
+        GLFWwindow *handle = nullptr;
 };

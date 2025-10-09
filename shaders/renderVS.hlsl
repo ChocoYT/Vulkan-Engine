@@ -10,10 +10,15 @@ struct VertexOutput
     float3 color    : COLOR;
 };
 
+cbuffer CameraBuffer : register(b0)
+{
+    float4x4 cameraMatrix;
+};
+
 VertexOutput main(VertexInput input)
 {
     VertexOutput output;
-    output.position = float4(input.position, 1.0);
+    output.position = mul(cameraMatrix, float4(input.position, 1.0));
     output.color    = input.color;
 
     return output;

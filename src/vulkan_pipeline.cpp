@@ -1,11 +1,16 @@
 #include "vulkan_pipeline.hpp"
 
-void VulkanPipeline::init(VulkanContext &vulkanContext, std::vector<VkVertexInputBindingDescription> &bindingDescs, std::vector<VkVertexInputAttributeDescription> &attrDescs)
-{
+void VulkanPipeline::init(
+    VulkanContext &vulkanContext,
+    std::vector<VkVertexInputBindingDescription>   &bindingDescs,
+    std::vector<VkVertexInputAttributeDescription> &attrDescs,
+    std::vector<VkDescriptorSetLayout>             &layoutDescs
+) {
     context = &vulkanContext;
 
-    this->bindingDescs = &bindingDescs;
-    this->attrDescs    = &attrDescs;
+    this->bindingDescs = bindingDescs;
+    this->attrDescs    = attrDescs;
+    this->layoutDescs  = layoutDescs;
 
     vertexShaderModule = createShaderModule("shaders/renderVS.spv");
     pixelShaderModule  = createShaderModule("shaders/renderPS.spv");
@@ -141,10 +146,10 @@ void VulkanPipeline::createGraphicsPipeline()
     // Vertex Input
     VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
     vertexInputInfo.sType                           = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-    vertexInputInfo.vertexBindingDescriptionCount   = static_cast<uint32_t>(bindingDescs->size());
-    vertexInputInfo.pVertexBindingDescriptions      = bindingDescs->data();
-    vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attrDescs->size());
-    vertexInputInfo.pVertexAttributeDescriptions    = attrDescs->data();
+    vertexInputInfo.vertexBindingDescriptionCount   = static_cast<uint32_t>(bindingDescs.size());
+    vertexInputInfo.pVertexBindingDescriptions      = bindingDescs.data();
+    vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attrDescs.size());
+    vertexInputInfo.pVertexAttributeDescriptions    = attrDescs.data();
 
     // Input Assembly
     VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
@@ -218,8 +223,8 @@ void VulkanPipeline::createGraphicsPipeline()
     // Pipeline Layout
     VkPipelineLayoutCreateInfo graphicsPipelineLayoutInfo{};
     graphicsPipelineLayoutInfo.sType                  = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    graphicsPipelineLayoutInfo.setLayoutCount         = 0;
-    graphicsPipelineLayoutInfo.pushConstantRangeCount = 0;
+    graphicsPipelineLayoutInfo.setLayoutCount         = static_cast<uint32_t>(layoutDescs.size());
+    graphicsPipelineLayoutInfo.pSetLayouts            = layoutDescs.data();
 
     result = vkCreatePipelineLayout(context->getDevice(), &graphicsPipelineLayoutInfo, nullptr, &graphicsPipelineLayout);
     if (result != VK_SUCCESS)

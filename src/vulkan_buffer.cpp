@@ -58,7 +58,7 @@ void VulkanBuffer::createBuffer(VkBufferUsageFlags usage, VkMemoryPropertyFlags 
     vkBindBufferMemory(context->getDevice(), buffer, memory, 0);
 }
 
-void VulkanBuffer::copyData(const void* srcData, VkDeviceSize dataSize)
+void VulkanBuffer::writeData(const void* srcData, VkDeviceSize dataSize)
 {
     void* dst;
     vkMapMemory(context->getDevice(), memory, 0, dataSize, 0, &dst);
@@ -111,4 +111,66 @@ uint32_t VulkanBuffer::findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags
     }
 
     throw std::runtime_error("Failed to Find Suitable Memory Type.");
+}
+
+void VulkanBuffer::initStagingBuffer(VulkanContext &vulkanContext, VkDeviceSize bufferSize)
+{
+    init(vulkanContext, bufferSize,
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
+    );
+}
+
+void VulkanBuffer::initVertexBuffer(VulkanContext &vulkanContext, void *bufferData, VkDeviceSize bufferSize)
+{
+    VulkanBuffer stagingBuffer;
+    stagingBuffer.initStagingBuffer(vulkanContext, bufferSize);
+    stagingBuffer.writeData(bufferData, bufferSize);
+
+    init(
+        vulkanContext,
+        bufferSize,
+        VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
+    );
+
+    stagingBuffer.copyTo(*this);
+    stagingBuffer.cleanup();
+}
+
+void VulkanBuffer::initIndexBuffer(VulkanContext &vulkanContext, void *bufferData, VkDeviceSize bufferSize)
+{
+    VulkanBuffer stagingBuffer;
+    stagingBuffer.initStagingBuffer(vulkanContext, bufferSize);
+    stagingBuffer.writeData(bufferData, bufferSize);
+
+    init(
+        vulkanContext,
+        bufferSize,
+        VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
+    );
+
+    stagingBuffer.copyTo(*this);
+    stagingBuffer.cleanup();
+}
+
+std::vector<VulkanBuffer> VulkanBuffer::createUniformBuffers(VulkanContext &vulkanContext, void *bufferData, VkDeviceSize bufferSize)
+{   
+    size_t count = vulkanContext.getSwapchainImages().size();
+
+    std::vector<VulkanBuffer> buffers(count);
+
+    for (auto &buffer: buffers) {
+        buffer.init(
+            vulkanContext,
+            bufferSize,
+            VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
+        );
+        if (bufferData)
+            buffer.writeData(bufferData, bufferSize);
+    }
+
+    return buffers;
 }

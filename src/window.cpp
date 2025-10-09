@@ -1,29 +1,14 @@
 #include "window.hpp"
 
-Window::Window(int width, int height, std::string name)
+void Window::init(int width, int height, const std::string &name)
 {
     this->width  = width;
     this->height = height;
-    this->name   = name;
+    this->name   = &name;
 
-    init();
-}
-
-Window::~Window()
-{
-    glfwDestroyWindow(handle);
-    glfwTerminate();
-}
-
-GLFWwindow* Window::getHandle() const { return handle; }
-
-void Window::init()
-{
     // Initialize GLFW
     if (!glfwInit())
-    {
         throw std::runtime_error("GLFW not Initialized Correctly.");
-    }
 
     // Create GLFW Window
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
@@ -35,4 +20,10 @@ void Window::init()
         glfwTerminate();
         throw std::runtime_error("Window not Initialized Correctly.");
     }
+}
+
+void Window::cleanup()
+{
+    glfwDestroyWindow(handle);
+    glfwTerminate();
 }
