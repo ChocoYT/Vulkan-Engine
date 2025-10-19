@@ -8,6 +8,9 @@
 class Window
 {
     public:
+        Window();
+        ~Window();
+
         void init(int width, int height, const std::string &name);
         void cleanup();
 

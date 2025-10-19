@@ -34,47 +34,18 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${INSTALL_DIRECTORY})
 add_executable(${PROJECT_NAME} ${SOURCES} ${HEADERS})
 target_include_directories(${PROJECT_NAME} PRIVATE ${INCLUDE_DIRECTORY})
 
-# --------------
 # Link Libraries
-# --------------
+find_package(Vulkan REQUIRED)
+add_subdirectory(external/glfw)
+add_subdirectory(external/glm)
 
-# Vulkan
-find_package (Vulkan REQUIRED)
-
-add_library(VulkanCppModule)
-add_library(Vulkan::cppm ALIAS VulkanCppModule)
-
-target_compile_definitions(VulkanCppModule PUBLIC
-    VULKAN_HPP_DISPATCH_LOADER_DYNAMIC=1
-    VULKAN_HPP_NO_STRUCT_CONSTRUCTORS=1
+target_link_libraries(${PROJECT_NAME} PRIVATE
+    Vulkan::Vulkan
+    glfw
+    glm
 )
-target_include_directories(VulkanCppModule PRIVATE ${Vulkan_INCLUDE_DIR})
 
-target_link_libraries(VulkanCppModule PUBLIC Vulkan::Vulkan)
-set_target_properties(VulkanCppModule PROPERTIES CXX_STANDARD 20)
-
-target_sources(VulkanCppModule
-    PUBLIC
-    FILE_SET cxx_modules TYPE CXX_MODULES
-    BASE_DIRS
-    ${Vulkan_INCLUDE_DIR}
-    FILES
-    ${Vulkan_INCLUDE_DIR}/vulkan/vulkan.cppm
-)
-target_link_libraries(${PROJECT_NAME} Vulkan::cppm)
-
-# GLFW
-add_subdirectory(external/GLFW)
-target_link_libraries(${PROJECT_NAME} glfw)
-target_include_directories(${PROJECT_NAME} PRIVATE external/GLFW/include)
-
-# GLM
-target_include_directories(${PROJECT_NAME} PRIVATE ${EXTERNAL_DIRECTORY}/glm/include)
-
-# ----------
 # Compile Shaders
-# ----------
-
 set(SHADER_DIRECTORY ${CMAKE_SOURCE_DIR}/shaders)
 set(SPIRV_OUTPUT_DIR ${INSTALL_DIRECTORY}/$<CONFIG>/shaders)
 

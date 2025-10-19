@@ -5,9 +5,9 @@
 // Screen
 constexpr int SCREEN_WIDTH  = 1600;
 constexpr int SCREEN_HEIGHT = 900;
-constexpr int FRAMES_IN_FLIGHT = 2;
+constexpr uint32_t FRAMES_IN_FLIGHT = 2;
 
-constexpr double TARGET_FPS = 60.0;
+constexpr double TARGET_FPS = 120.0;
 constexpr double FRAME_TIME = 1.0 / TARGET_FPS;
 
 inline std::string SCREEN_NAME = "Vulkan Engine";

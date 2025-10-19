@@ -66,6 +66,14 @@
         "xtree": "cpp",
         "fstream": "cpp",
         "map": "cpp",
-        "set": "cpp"
+        "set": "cpp",
+        "chrono": "cpp",
+        "thread": "cpp",
+        "forward_list": "cpp",
+        "mutex": "cpp",
+        "ratio": "cpp",
+        "stop_token": "cpp",
+        "numeric": "cpp",
+        "random": "cpp"
     }
 }

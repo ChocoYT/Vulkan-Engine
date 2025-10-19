@@ -8,11 +8,11 @@
 #include "camera.hpp"
 #include "mesh.hpp"
 #include "settings.hpp"
-#include "vulkan_context.hpp"
-#include "vulkan_pipeline.hpp"
+#include "Core/context.hpp"
+#include "Pipeline/pipeline.hpp"
 #include "window.hpp"
 
-#include "Buffers/uniform_buffer.hpp"
+#include "Buffers/uniform.hpp"
 
 class App
 {
@@ -20,7 +20,7 @@ class App
         void run();
 
     private:
-        Window         window;
-        VulkanContext  context;
-        VulkanPipeline pipeline;
+        Window   window;
+        Context  context;
+        Pipeline pipeline;
 };

@@ -1,5 +1,11 @@
 #include "window.hpp"
 
+Window::Window() = default;
+Window::~Window()
+{
+    cleanup();
+}
+
 void Window::init(int width, int height, const std::string &name)
 {
     this->width  = width;

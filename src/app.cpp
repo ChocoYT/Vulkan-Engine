@@ -1,10 +1,17 @@
 #include "app.hpp"
 
+#include "Core/physical_device.hpp"
+#include "Core/device.hpp"
+#include "Core/command_pool.hpp"
+#include "Core/descriptor_pool.hpp"
+
+#include "settings.hpp"
+
 void App::run()
 {
     // Initialize Window and Context
     window.init(SCREEN_WIDTH, SCREEN_HEIGHT, SCREEN_NAME);
-    context.init(window);
+    context.init(window.getHandle(), FRAMES_IN_FLIGHT);
 
     // Binding Description
     std::vector<VkVertexInputBindingDescription> bindingDescs(1);
@@ -31,16 +38,17 @@ void App::run()
     CameraBuffer cameraBufferData{};
     VkDeviceSize cameraBufferSize = sizeof(CameraBuffer);
 
-    UniformBuffer cameraUBO;
-    cameraUBO.init(context, cameraBufferSize);
+    UniformBuffer cameraUBO(context);
+    cameraUBO.init(cameraBufferSize, FRAMES_IN_FLIGHT);
 
     std::vector<VkDescriptorSetLayout> layoutDescs;
     layoutDescs.push_back(cameraUBO.getDescriptorSetLayout());
 
     // Initialize Pipeline
-    pipeline.init(context, bindingDescs, attrDescs, layoutDescs);
+    pipeline.init(context, bindingDescs, attrDescs, layoutDescs, FRAMES_IN_FLIGHT);
 
-    Camera camera(window, glm::vec3(0.0f, 0.0f, 2.0f), glm::vec3(0.0f, -90.0f, 0.0f), CAMERA_FOV, CAMERA_NEAR, CAMERA_FAR);
+    Camera camera(window);
+    camera.init(glm::vec3(0.0f, 0.0f, 2.0f), glm::vec3(0.0f, -90.0f, 0.0f), CAMERA_FOV, CAMERA_NEAR, CAMERA_FAR);
 
     // Initialize Mesh
     std::vector<Vertex> vertices = {
@@ -51,13 +59,13 @@ void App::run()
     std::vector<uint32_t> indices = {
         0, 1, 2
     };
-    Mesh mesh;
-    mesh.init(context, vertices, indices);
+    Mesh mesh(context);
+    mesh.init(vertices, indices, FRAMES_IN_FLIGHT);
 
-    int currentFrame = 0;
+    uint32_t currentFrame = 0;
 
     double currentFrameTime = glfwGetTime();
-    double lastFrameTime    = currentFrame;
+    double lastFrameTime    = currentFrameTime;
     double deltaTime;
 
     while (!glfwWindowShouldClose(window.getHandle()))
@@ -65,9 +73,11 @@ void App::run()
         currentFrameTime = glfwGetTime();
         deltaTime        = currentFrameTime - lastFrameTime;
         
+        // Exit if ESC is Pressed
         if (glfwGetKey(window.getHandle(), GLFW_KEY_ESCAPE) == GLFW_PRESS)
             glfwSetWindowShouldClose(window.getHandle(), true);
 
+        // Limit FPS
         if (deltaTime < FRAME_TIME)
         {
             double sleepTime = FRAME_TIME - deltaTime;
@@ -78,7 +88,8 @@ void App::run()
             deltaTime = currentFrameTime - lastFrameTime;
         }
         lastFrameTime = currentFrameTime;
-
+        
+        // Render
         pipeline.waitForFence(currentFrame);
 
         VkCommandBuffer commandBuffer = context.beginFrame(currentFrame);
@@ -87,17 +98,16 @@ void App::run()
         pipeline.bind(commandBuffer);
 
         // Update Camera
-        camera.rotate(deltaTime);
-        camera.move(deltaTime);
+        camera.update(deltaTime);
 
         // Uniform Buffers
         cameraBufferData.cameraMatrix = camera.getProjMatrix() * camera.getViewMatrix();
 
-        cameraUBO.update(currentFrame, &cameraBufferData);
-        cameraUBO.bind(context, pipeline, currentFrame);
+        cameraUBO.update(&cameraBufferData, currentFrame);
+        cameraUBO.bind(commandBuffer, pipeline.getPipelineLayout(), currentFrame);
     
         // Draw Mesh
-        mesh.bind(commandBuffer);
+        mesh.bind(commandBuffer, currentFrame);
         mesh.draw(commandBuffer);
 
         pipeline.endFrame(commandBuffer, imageIndex, currentFrame);
@@ -107,14 +117,8 @@ void App::run()
         glfwPollEvents();
     }
 
-    vkDeviceWaitIdle(context.getDevice());
+    vkDeviceWaitIdle(context.getDevice().getHandle());
     
     // Cleanup
     pipeline.cleanup();
-
-    mesh.cleanup();
-    cameraUBO.cleanup(context);
-
-    context.cleanup();
-    window.cleanup();
 }

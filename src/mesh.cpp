@@ -1,36 +1,58 @@
 #include "mesh.hpp"
 
-void Mesh::init(VulkanContext& vulkanContext, const std::vector<Vertex>& vertices, const std::vector<uint32_t>& indices)
+#include "Buffers/vertex.hpp"
+#include "Buffers/index.hpp"
+
+Mesh::Mesh(Context &context) : m_context(context) {}
+Mesh::~Mesh()
 {
-    context = &vulkanContext;
+    cleanup();
+}
 
-    vertexCount = static_cast<uint32_t>(vertices.size());
-    VkDeviceSize vertexBufferSize = sizeof(vertices[0]) * vertexCount;
+void Mesh::init(
+    const std::vector<Vertex>   &vertices,
+    const std::vector<uint32_t> &indices,
+    uint32_t bufferCount
+) {
+    m_vertexCount = static_cast<uint32_t>(vertices.size());
+    VkDeviceSize vertexBufferSize = sizeof(vertices[0]) * m_vertexCount;
 
-    vertexBuffer.initVertexBuffer(vulkanContext, (void*)vertices.data(), vertexBufferSize);
+    m_indexCount = static_cast<uint32_t>(indices.size());
+    VkDeviceSize indexBufferSize = sizeof(indices[0]) * m_indexCount;
 
-    indexCount = static_cast<uint32_t>(indices.size());
-    VkDeviceSize indexBufferSize = sizeof(indices[0]) * indexCount;
+    m_vertexBuffer = std::make_unique<VertexBuffer>(m_context);
+    m_vertexBuffer->init(vertexBufferSize, bufferCount);
+    m_indexBuffer = std::make_unique<IndexBuffer>(m_context);
+    m_indexBuffer->init(indexBufferSize, bufferCount);
 
-    indexBuffer.initIndexBuffer(vulkanContext, (void*)indices.data(), indexBufferSize);
+    for (uint32_t currentFrame = 0; currentFrame < bufferCount; ++currentFrame)
+        update(vertices, indices, currentFrame);
 }
 
 void Mesh::cleanup()
 {
-    vertexBuffer.cleanup();
-    indexBuffer.cleanup();
+    m_vertexBuffer->cleanup();
+    m_indexBuffer->cleanup();
 }
 
-void Mesh::bind(VkCommandBuffer commandBuffer)
-{
-    VkBuffer     vertexBuffers[] = {vertexBuffer.getBuffer()};
-    VkDeviceSize offsets[]       = {0};
+void Mesh::bind(
+    VkCommandBuffer commandBuffer,
+    uint32_t        currentFrame
+) {
+    m_vertexBuffer->bind(commandBuffer, currentFrame);
+    m_indexBuffer->bind(commandBuffer, currentFrame);
+}
 
-    vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
-    vkCmdBindIndexBuffer(commandBuffer, indexBuffer.getBuffer(), 0, VK_INDEX_TYPE_UINT32);
+void Mesh::update(
+    const std::vector<Vertex>   &vertices,
+    const std::vector<uint32_t> &indices,
+    uint32_t currentFrame
+) {
+    m_vertexBuffer->update((void*)vertices.data(), currentFrame);
+    m_indexBuffer->update((void*)indices.data(), currentFrame);
 }
 
 void Mesh::draw(VkCommandBuffer commandBuffer)
 {
-    vkCmdDrawIndexed(commandBuffer, indexCount, 1, 0, 0, 0);
+    vkCmdDrawIndexed(commandBuffer, m_indexCount, 1, 0, 0, 0);
 }
