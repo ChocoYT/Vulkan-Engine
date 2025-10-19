@@ -18,8 +18,8 @@ void Pipeline::init(
     this->attrDescs    = attrDescs;
     this->layoutDescs  = layoutDescs;
 
-    vertexShaderModule = createShaderModule("shaders/renderVS.spv");
-    pixelShaderModule  = createShaderModule("shaders/renderPS.spv");
+    vertexShaderModule = createShaderModule("assets/shaders/renderVS.spv");
+    pixelShaderModule  = createShaderModule("assets/shaders/renderPS.spv");
 
     createGraphicsPipeline();
     createSemaphores(frameCount);
