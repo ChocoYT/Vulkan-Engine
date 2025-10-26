@@ -6,9 +6,10 @@
 
 int main()
 {
-    App app;
-
     try {
+        App app;
+        
+        app.init();
         app.run();
     }
     catch (const std::exception &exception)

@@ -1,26 +1,27 @@
 #pragma once
 
+#include <memory>
+
+#include <GLFW/glfw3.h>
 #include <vulkan/vulkan.h>
 
-#include <chrono>
-#include <thread>
-
-#include "camera.hpp"
-#include "mesh.hpp"
 #include "settings.hpp"
-#include "Core/context.hpp"
-#include "Pipeline/pipeline.hpp"
-#include "window.hpp"
 
-#include "Buffers/uniform.hpp"
+class Window;
+class Renderer;
 
 class App
 {
     public:
+        App();
+        ~App();
+
+        void init();
+        void cleanup();
+
         void run();
 
     private:
-        Window   window;
-        Context  context;
-        Pipeline pipeline;
+        std::unique_ptr<Window>   m_window;
+        std::unique_ptr<Renderer> m_renderer;
 };
