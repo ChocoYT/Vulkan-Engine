@@ -1,24 +1,41 @@
 #pragma once
 
-#include <vulkan/vulkan.h>
-
+#include <memory>
 #include <string>
 
-class Context;
+#include <vulkan/vulkan.h>
 
-class ShaderModule
+class VulkanDevice;
+
+class VulkanShaderModule
 {
     public:
-        ShaderModule(const Context &context);
-        ~ShaderModule();
+        ~VulkanShaderModule();
 
-        void init(const std::string &filePath);
-        void cleanup();
+        static std::unique_ptr<VulkanShaderModule> Create(
+            const VulkanDevice &device,
+            const std::string &filePath
+        );
 
-        const VkShaderModule getHandle() const { return m_handle; }
+        const VkShaderModule GetHandle() const { return m_handle; }
 
     private:
-        VkShaderModule m_handle = VK_NULL_HANDLE;
+        VulkanShaderModule(
+            const VulkanDevice &device,
+            VkShaderModule m_handle
+        );
 
-        const Context &m_context;
+        // Remove Copying Semantics
+        VulkanShaderModule(const VulkanShaderModule&) = delete;
+        VulkanShaderModule& operator=(const VulkanShaderModule&) = delete;
+        
+        // Safe Move Semantics
+        VulkanShaderModule(VulkanShaderModule &&other) noexcept;
+        VulkanShaderModule& operator=(VulkanShaderModule &&other) noexcept;
+
+        void Cleanup();
+
+        const VulkanDevice &m_device;
+
+        VkShaderModule m_handle = VK_NULL_HANDLE;
 };

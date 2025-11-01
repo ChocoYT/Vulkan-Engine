@@ -1,25 +1,41 @@
 #pragma once
 
+#include <cstdint>
+#include <memory>
+
 #include <vulkan/vulkan.h>
 
-#include <iostream>
-#include <vector>
+class VulkanDevice;
 
-class Context;
-
-class DescriptorPool
+class VulkanDescriptorPool
 {
     public:
-        DescriptorPool(const Context &context);
-        ~DescriptorPool();
+        ~VulkanDescriptorPool();
 
-        void init(uint32_t frameCount);
-        void cleanup();
+        static std::unique_ptr<VulkanDescriptorPool> Create(
+            const VulkanDevice &device,
+            uint32_t frameCount
+        );
 
-        const VkDescriptorPool getHandle() const { return m_handle; }
+        const VkDescriptorPool GetHandle() const { return m_handle; }
 
     private:
-        VkDescriptorPool m_handle = VK_NULL_HANDLE;
+        VulkanDescriptorPool(
+            const VulkanDevice &device,
+            VkDescriptorPool handle
+        );
 
-        const Context &m_context;
+        void Cleanup();
+
+        // Remove Copying Semantics
+        VulkanDescriptorPool(const VulkanDescriptorPool&) = delete;
+        VulkanDescriptorPool& operator=(const VulkanDescriptorPool&) = delete;
+        
+        // Safe Move Semantics
+        VulkanDescriptorPool(VulkanDescriptorPool &&other) noexcept;
+        VulkanDescriptorPool& operator=(VulkanDescriptorPool &&other) noexcept;
+
+        const VulkanDevice &m_device;
+
+        VkDescriptorPool m_handle = VK_NULL_HANDLE;
 };

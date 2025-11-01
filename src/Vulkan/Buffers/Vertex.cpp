@@ -1,67 +1,85 @@
 #include "Vulkan/Buffers/Vertex.hpp"
 
 #include "Vulkan/Resources/Buffer.hpp"
-
 #include "Vulkan/Buffers/Staging.hpp"
 
-VertexBuffer::VertexBuffer(
-    const Context     &context,
-    const CommandPool &commandPool,
-    MemoryAllocator   &allocator
-) : m_context(context), m_commandPool(commandPool), m_allocator(allocator) {}
+VulkanVertexBuffer::VulkanVertexBuffer(
+    std::vector<std::unique_ptr<VulkanBuffer>>        buffers,
+    std::vector<std::unique_ptr<VulkanStagingBuffer>> stagingBuffers,
+    VkDeviceSize size,
+    uint32_t     count
+) : m_buffers(std::move(buffers)),
+    m_stagingBuffers(std::move(stagingBuffers)),
+    m_size(size),
+    m_count(count)
+{}
 
-VertexBuffer::~VertexBuffer()
-{
-    cleanup();
-}
+VulkanVertexBuffer::~VulkanVertexBuffer() = default;
 
-void VertexBuffer::init(
-    VkDeviceSize bufferSize,
-    uint32_t     bufferCount
+std::unique_ptr<VulkanVertexBuffer> VulkanVertexBuffer::Create(
+    const VulkanPhysicalDevice &physicalDevice,
+    const VulkanDevice         &device,
+    VulkanMemoryAllocator      &allocator,
+    VkDeviceSize size,
+    uint32_t     count
 ) {
-    m_bufferSize  = bufferSize;
-    m_bufferCount = bufferCount;
-
     // Initialize Vertex Buffers
-    for (uint32_t i = 0; i < bufferCount; ++i)
+    std::vector<std::unique_ptr<VulkanBuffer>> buffers;
+
+    for (uint32_t i = 0; i < count; ++i)
     {
-        m_buffers.emplace_back(std::make_unique<Buffer>(m_context, m_commandPool, m_allocator));
-        m_buffers.back()->init(
-            bufferSize,
-            VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
+        buffers.emplace_back(
+            VulkanBuffer::Create(
+                physicalDevice,
+                device,
+                allocator,
+                size,
+                VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+                VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
+            )
         );
     }
 
     // Initialize Staging Buffers
-    for (uint32_t i = 0; i < bufferCount; ++i)
+    std::vector<std::unique_ptr<VulkanStagingBuffer>> stagingBuffers;
+
+    for (uint32_t i = 0; i < count; ++i)
     {
-        m_stagingBuffers.emplace_back(std::make_unique<StagingBuffer>(m_context, m_commandPool, m_allocator));
-        m_stagingBuffers.back()->init(bufferSize);
+        stagingBuffers.emplace_back(
+            VulkanStagingBuffer::Create(
+                physicalDevice,
+                device,
+                allocator,
+                size
+            )
+        );
     }
+
+    return std::unique_ptr<VulkanVertexBuffer>(
+        new VulkanVertexBuffer(
+            std::move(buffers),
+            std::move(stagingBuffers),
+            size,
+            count
+        )
+    );
 }
 
-void VertexBuffer::cleanup()
-{
-    for (auto &buffer : m_buffers)
-        if (buffer) buffer->cleanup();
-
-    for (auto &staging : m_stagingBuffers)
-        if (staging) staging->cleanup();
-    
+void VulkanVertexBuffer::Cleanup()
+{   
     m_buffers.clear();
     m_stagingBuffers.clear();
 }
 
-void VertexBuffer::bind(
-    VkCommandBuffer commandBuffer,
+void VulkanVertexBuffer::Bind(
+    VkCommandBuffer vkCommandBuffer,
     uint32_t        currentFrame
 ) {
-    VkBuffer     buffers[] = { m_buffers[currentFrame]->getHandle() };
+    VkBuffer     buffers[] = { m_buffers[currentFrame]->GetHandle() };
     VkDeviceSize offsets[] = { 0 };
 
     vkCmdBindVertexBuffers(
-        commandBuffer,
+        vkCommandBuffer,
         0,
         1,
         buffers,
@@ -69,10 +87,37 @@ void VertexBuffer::bind(
     );
 }
 
-void VertexBuffer::update(
-    void     *bufferData,
+void VulkanVertexBuffer::Update(
+    const VulkanCommandPool &commandPool,
+    void     *data,
     uint32_t currentFrame
 ) {
-    m_stagingBuffers[currentFrame]->update(bufferData);
-    m_stagingBuffers[currentFrame]->copyTo(*m_buffers[currentFrame]);
+    m_stagingBuffers[currentFrame]->Update(data);
+    m_stagingBuffers[currentFrame]->CopyTo(commandPool, *m_buffers[currentFrame]);
+}
+
+VulkanVertexBuffer::VulkanVertexBuffer(VulkanVertexBuffer&& other) noexcept : 
+    m_buffers(std::move(other.m_buffers)),
+    m_stagingBuffers(std::move(other.m_stagingBuffers)),
+    m_size(other.m_size),
+    m_count(other.m_count)
+{
+    other = VulkanVertexBuffer{};
+}
+
+VulkanVertexBuffer& VulkanVertexBuffer::operator=(VulkanVertexBuffer &&other) noexcept
+{
+    if (this != &other)
+    {
+        Cleanup(); 
+
+        m_buffers        = std::move(other.m_buffers);
+        m_stagingBuffers = std::move(other.m_stagingBuffers);
+        m_size           = other.m_size;
+        m_count          = other.m_count;
+
+        other = VulkanVertexBuffer{};
+    }
+
+    return *this;
 }

@@ -5,58 +5,92 @@
 
 #include "Window/Window.hpp"
 #include "Scene/Scene.hpp"
-#include "Scene/Camera.hpp"
-#include "Renderer/Renderer.hpp"
+#include "Vulkan/Renderer/Renderer.hpp"
+#include "Vulkan/Core/Context.hpp"
 
-App::App() = default;
-App::~App()
-{
-    cleanup();
-}
+#include "Scene/Mesh.hpp"
 
-void App::init()
+App::App(
+    std::unique_ptr<Window>         window,
+    std::unique_ptr<VulkanRenderer> renderer,
+    std::shared_ptr<VulkanScene>    scene
+) : m_window(std::move(window)),
+    m_renderer(std::move(renderer)),
+    m_scene(std::move(scene))
+{}
+
+App::~App() = default;
+
+App App::Create()
 {
     // Window
-    m_window = std::make_unique<Window>();
-    m_window->init(SCREEN_WIDTH, SCREEN_HEIGHT, SCREEN_NAME);
-
-    // Camera
-    std::unique_ptr<Camera> camera;
-    camera = std::make_unique<Camera>(*m_window);
-    camera->init(glm::vec3(0.0f, 0.0f, 2.0f), glm::vec3(0.0f, -90.0f, 0.0f), CAMERA_FOV, CAMERA_NEAR, CAMERA_FAR);
+    auto window = Window::Create();
+    
+    // Renderer
+    auto renderer = VulkanRenderer::Create(*window);
 
     // Scene
-    std::unique_ptr<Scene> scene;
-    scene = std::make_unique<Scene>();
-    scene->init();
-    scene->setCamera(camera);
-    
-    // Window
-    m_renderer = std::make_unique<Renderer>(*m_window);
-    m_renderer->init();
-    m_renderer->setScene(scene);
+    std::shared_ptr<VulkanScene> scene = std::move(VulkanScene::Create(
+        renderer->GetContext().GetPhysicalDevice(),
+        renderer->GetContext().GetDevice(),
+        renderer->GetDescriptorPool(),
+        renderer->GetAllocator(),
+        FRAMES_IN_FLIGHT
+    ));
+
+    renderer->SetScene(scene);
+
+    return App(
+        std::move(window),
+        std::move(renderer),
+        std::move(scene)
+    );
 }
 
-void App::cleanup()
-{
-    m_renderer->cleanup();
-    m_window->cleanup();
-}
-
-void App::run()
+void App::Run()
 {
     double currentFrameTime = glfwGetTime();
     double lastFrameTime    = currentFrameTime;
     double deltaTime;
 
-    while (!glfwWindowShouldClose(m_window->getHandle()))
+    std::vector<Vertex> vertices = {
+        Vertex(glm::vec3( 0.0f, -0.5f, 0.0f), glm::vec3(1.0f, 0.0f, 0.0f)),
+        Vertex(glm::vec3( 0.5f,  0.5f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f)),
+        Vertex(glm::vec3(-0.5f,  0.5f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f))
+    };
+    std::vector<uint32_t> indices = {
+        0, 1, 2
+    };
+
+    auto mesh = VulkanMesh::Create(
+        m_renderer->GetContext().GetPhysicalDevice(),
+        m_renderer->GetContext().GetDevice(),
+        m_renderer->GetAllocator(),
+        vertices.size() * sizeof(Vertex),
+        indices.size()  * sizeof(uint32_t),
+        FRAMES_IN_FLIGHT
+    );
+
+    for (uint32_t currentFrame = 0; currentFrame < FRAMES_IN_FLIGHT; ++currentFrame)
+    {
+        mesh->UpdateBuffers(
+            m_renderer->GetCommandPool(),
+            vertices,
+            indices,
+            currentFrame
+        );
+    }
+
+    m_scene->AddMesh(std::move(mesh));
+
+    while (!glfwWindowShouldClose(m_window->GetHandle()))
     {
         currentFrameTime = glfwGetTime();
         deltaTime        = currentFrameTime - lastFrameTime;
         
         // Exit if ESC is Pressed
-        if (glfwGetKey(m_window->getHandle(), GLFW_KEY_ESCAPE) == GLFW_PRESS)
-            glfwSetWindowShouldClose(m_window->getHandle(), true);
+        if (glfwGetKey(m_window->GetHandle(), GLFW_KEY_ESCAPE) == GLFW_PRESS)
+            glfwSetWindowShouldClose(m_window->GetHandle(), true);
 
         // Limit FPS
         if (deltaTime < FRAME_TIME)
@@ -70,9 +104,15 @@ void App::run()
         }
         lastFrameTime = currentFrameTime;
         
-        m_renderer->update(deltaTime);
-        m_renderer->draw();
+        m_scene->Update(
+            *m_window,
+            deltaTime,
+            m_renderer->GetCurrentFrame()
+        );
+        m_renderer->Draw();
 
         glfwPollEvents();
     }
+
+    m_renderer->Finish();
 }

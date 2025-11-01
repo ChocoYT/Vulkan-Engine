@@ -5,45 +5,57 @@
 
 #include <vulkan/vulkan.h>
 
-using AllocationHandle = void*;
+using VulkanAllocationHandle = void*;
 
-class Context;
+class VulkanPhysicalDevice;
+class VulkanDevice;
 
-class MemoryAllocator
+class VulkanMemoryAllocator
 {
     public:
-        MemoryAllocator(const Context &context);
-        ~MemoryAllocator();
+        ~VulkanMemoryAllocator();
 
-        void free(AllocationHandle handle);
+        static std::unique_ptr<VulkanMemoryAllocator> Create();
 
-        AllocationHandle allocate(
+        void Free(
+            const VulkanDevice     &device,
+            VulkanAllocationHandle handle
+        );
+
+        VulkanAllocationHandle Allocate(
+            const VulkanPhysicalDevice &physicalDevice,
+            const VulkanDevice         &device,
             VkDeviceSize          size,
             uint32_t              memoryTypeBits,
             VkMemoryPropertyFlags properties
         );
 
-        void* map(AllocationHandle handle);
-        void  unmap(AllocationHandle handle);
-
-        void bindBuffer(
-            VkBuffer         vkBuffer, 
-            AllocationHandle handle
+        void* Map(
+            const VulkanDevice     &device,
+            VulkanAllocationHandle allocationHandle
         );
-        void bindImage(
-            VkImage          vkImage,
-            AllocationHandle handle
+        void Unmap(
+            const VulkanDevice     &device,
+            VulkanAllocationHandle allocationHandle
+        );
+
+        void BindBuffer(
+            const VulkanDevice     &device,
+            VkBuffer               handle, 
+            VulkanAllocationHandle allocationHandle
+        );
+        void BindImage(
+            const VulkanDevice     &device,
+            VkImage                handle,
+            VulkanAllocationHandle allocationHandle
         );
 
     private:
-        // Disallow Copying and Assignment
-        MemoryAllocator(const MemoryAllocator&)            = delete;
-        MemoryAllocator& operator=(const MemoryAllocator&) = delete;
+        VulkanMemoryAllocator() = default;;
 
-        uint32_t findMemoryType(
+        uint32_t FindMemoryType(
+            const VulkanPhysicalDevice &physicalDevice,
             uint32_t              typeFilter, 
             VkMemoryPropertyFlags properties
         ) const;
-
-        const Context &m_context;
 };

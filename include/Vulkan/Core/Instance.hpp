@@ -1,25 +1,39 @@
 #pragma once
 
-#define GLFW_NO_INCLUDE_VULKAN
-#include <GLFW/glfw3.h>
+#include <string>
+#include <memory>
+
 #include <vulkan/vulkan.h>
 
-#include <iostream>
-#include <vector>
-
-#include "settings.hpp"
-
-class Instance
+class VulkanInstance
 {
     public:
-        Instance();
-        ~Instance();
+        ~VulkanInstance();
 
-        void init();
-        void cleanup();
+        static std::unique_ptr<VulkanInstance> Create(
+            const std::string &appName,
+            uint32_t          appVersion,
+            const std::string &engineName,
+            uint32_t          engineVersion
+        );
 
-        const VkInstance getHandle() const { return m_handle; }
+        const VkInstance GetHandle() const { return m_handle; }
 
     private:
+        VulkanInstance() = default;
+        VulkanInstance(
+            VkInstance handle
+        );
+
+        // Remove Copying Semantics
+        VulkanInstance(const VulkanInstance&) = delete;
+        VulkanInstance& operator=(const VulkanInstance&) = delete;
+        
+        // Safe Move Semantics
+        VulkanInstance(VulkanInstance &&other) noexcept;
+        VulkanInstance& operator=(VulkanInstance &&other) noexcept;
+
+        void Cleanup();
+
         VkInstance m_handle = VK_NULL_HANDLE;
 };

@@ -1,6 +1,7 @@
 #include "Vulkan/Core/Debug.hpp"
 
-#include "Vulkan/Core/Context.hpp"
+#include <iostream>
+
 #include "Vulkan/Core/Instance.hpp"
 
 VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
@@ -14,16 +15,21 @@ VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
     return VK_FALSE;
 }
 
-Debug::Debug(const Context &context) : m_context(context) {}
-Debug::~Debug()
+VulkanDebug::VulkanDebug(
+    const VulkanInstance     &instance,
+    VkDebugUtilsMessengerEXT handle
+) : m_instance(instance),
+    m_handle(handle)
+{}
+
+VulkanDebug::~VulkanDebug()
 {
-    cleanup();
+    Cleanup();
 }
 
-void Debug::init()
-{
-    VkInstance instance = m_context.getInstance().getHandle();
-
+std::unique_ptr<VulkanDebug> VulkanDebug::Create(
+    const VulkanInstance &instance
+) {
     VkDebugUtilsMessengerCreateInfoEXT createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
     createInfo.messageSeverity =
@@ -39,24 +45,58 @@ void Debug::init()
 
     // Load Extensions
     auto funcCreateDebugMessenger = (PFN_vkCreateDebugUtilsMessengerEXT)
-        vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT");
+        vkGetInstanceProcAddr(instance.GetHandle(), "vkCreateDebugUtilsMessengerEXT");
+
+    // Create Debug Messenger
+    VkDebugUtilsMessengerEXT handle = VK_NULL_HANDLE;
     
     if (!funcCreateDebugMessenger)
         throw std::runtime_error("Could not load vkCreateDebugUtilsMessengerEXT");
-    if (funcCreateDebugMessenger(instance, &createInfo, nullptr, &m_handle) != VK_SUCCESS)
+    if (funcCreateDebugMessenger(instance.GetHandle(), &createInfo, nullptr, &handle) != VK_SUCCESS)
         throw std::runtime_error("Failed to create Vulkan Debug Callback.");
 
     std::cout << "[INFO]\tDebug Messenger Created Successfully\n";
+
+    return std::unique_ptr<VulkanDebug>(
+        new VulkanDebug(
+            instance,
+            handle
+        )
+    );
 }
 
-void Debug::cleanup()
+void VulkanDebug::Cleanup()
 {
-    VkInstance instance = m_context.getInstance().getHandle();
+    // Load Extensions
+    auto funcDestroyDebugMessenger = (PFN_vkDestroyDebugUtilsMessengerEXT)
+        vkGetInstanceProcAddr(m_instance.GetHandle(), "vkDestroyDebugUtilsMessengerEXT");
 
     // Destroy Debug Messenger
-    auto funcDestroyDebugMessenger = (PFN_vkDestroyDebugUtilsMessengerEXT)
-        vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
+    if (m_handle != VK_NULL_HANDLE)
+    {
+        if (funcDestroyDebugMessenger)
+            funcDestroyDebugMessenger(m_instance.GetHandle(), m_handle, nullptr);
+        m_handle = VK_NULL_HANDLE;
+    }
+}
 
-    if (funcDestroyDebugMessenger && m_handle != VK_NULL_HANDLE)
-        funcDestroyDebugMessenger(instance, m_handle, nullptr);
+VulkanDebug::VulkanDebug(VulkanDebug &&other) noexcept : 
+    m_instance(other.m_instance),
+    m_handle(other.m_handle)
+{
+    other.m_handle = VK_NULL_HANDLE;
+}
+
+VulkanDebug& VulkanDebug::operator=(VulkanDebug &&other) noexcept
+{
+    if (this != &other)
+    {
+        Cleanup();
+        
+        m_handle = other.m_handle;
+
+        other.m_handle = VK_NULL_HANDLE;
+    }
+
+    return *this;
 }

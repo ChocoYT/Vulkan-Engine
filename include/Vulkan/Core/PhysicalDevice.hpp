@@ -2,33 +2,59 @@
 
 #include <vulkan/vulkan.h>
 
-#include <iostream>
-#include <vector>
+#include <cstdint>
+#include <memory>
+#include <optional>
 
-class Context;
+struct QueueFamilyIndices {
+    std::optional<uint32_t> graphicsFamily;
+    std::optional<uint32_t> presentFamily;
 
-class PhysicalDevice
+    bool isComplete() const {
+        return graphicsFamily.has_value() && presentFamily.has_value();
+    }
+};
+
+class VulkanInstance;
+class VulkanSurface;
+
+class VulkanPhysicalDevice
 {
     public:
-        PhysicalDevice(const Context &context);
-        ~PhysicalDevice();
+        static std::unique_ptr<VulkanPhysicalDevice> Create(
+            const VulkanInstance &instance,
+            const VulkanSurface  &surface
+        );
 
-        void init();
+        ~VulkanPhysicalDevice();
 
-        const VkPhysicalDevice getHandle() const { return m_handle; }
+        const VkPhysicalDevice GetHandle() const { return m_handle; }
 
-        const uint32_t getGraphicsQueueFamily() const { return m_graphicsQueueFamily; }
-        const uint32_t getPresentQueueFamily()  const { return m_presentQueueFamily;  }
+        const uint32_t GetGraphicsQueueFamily() const { return m_graphicsQueueFamily; }
+        const uint32_t GetPresentQueueFamily()  const { return m_presentQueueFamily;  }
 
     private:
-        bool isDeviceSuitable(VkSurfaceKHR surface, VkPhysicalDevice device);
-        void findQueueFamilies(VkSurfaceKHR surface, VkPhysicalDevice device);
+        VulkanPhysicalDevice() = default;
+        VulkanPhysicalDevice(
+            VkPhysicalDevice handle,
+            uint32_t         graphicsQueueFamily,
+            uint32_t         presentQueueFamily
+        );
 
-        // Queue Families
-        uint32_t m_graphicsQueueFamily = UINT32_MAX;
-        uint32_t m_presentQueueFamily  = UINT32_MAX;
+        // Remove Copying Semantics
+        VulkanPhysicalDevice(const VulkanPhysicalDevice&) = delete;
+        VulkanPhysicalDevice& operator=(const VulkanPhysicalDevice&) = delete;
+        
+        // Safe Move Semantics
+        VulkanPhysicalDevice(VulkanPhysicalDevice &&other) noexcept;
+        VulkanPhysicalDevice& operator=(VulkanPhysicalDevice &&other) noexcept;
+
+        static bool               IsDeviceSuitable(VkSurfaceKHR vkSurface, VkPhysicalDevice vkPhysicalDevice);
+        static QueueFamilyIndices FindQueueFamilies(VkSurfaceKHR vkSurface, VkPhysicalDevice vkPhysicalDevice);
 
         VkPhysicalDevice m_handle = VK_NULL_HANDLE;
 
-        const Context &m_context;
+        // Queue Families
+        uint32_t m_graphicsQueueFamily = VK_QUEUE_FAMILY_IGNORED;
+        uint32_t m_presentQueueFamily  = VK_QUEUE_FAMILY_IGNORED;
 };

@@ -1,61 +1,82 @@
 #pragma once
 
-#include <vulkan/vulkan.h>
-
+#include <cstdint>
 #include <memory>
 #include <vector>
 
-class Context;
-class Swapchain;
-class RenderPass;
-class Synchronization;
+#include <vulkan/vulkan.h>
 
-class ShaderModule;
+class VulkanDevice;
+class VulkanSwapchain;
+class VulkanRenderPass;
+class VulkanSync;
 
-class Pipeline
+class VulkanShaderModule;
+
+class VulkanPipeline
 {
     public:
-        Pipeline(
-            const Context         &context,
-            const Swapchain       &swapchain,
-            const RenderPass      &renderPass,
-            const Synchronization &synchronization
-        );
-        ~Pipeline();
+        ~VulkanPipeline();
 
-        void init(
+        static std::unique_ptr<VulkanPipeline> Create(
+            const VulkanDevice     &device,
+            const VulkanSwapchain  &swapchain,
+            const VulkanRenderPass &renderPass,
             std::vector<VkVertexInputBindingDescription>   &bindingDescs,
             std::vector<VkVertexInputAttributeDescription> &attrDescs,
             std::vector<VkDescriptorSetLayout>             &layoutDescs,
             uint32_t frameCount
         );
-        void cleanup();
 
-        void bind(VkCommandBuffer commandBuffer);
+        void Bind(
+            VkCommandBuffer vkCommandBuffer,
+            const std::vector<VkDescriptorSet> &vkDescriptorSets
+        );
 
-        uint32_t beginFrame(VkCommandBuffer commandBuffer, uint32_t currentFrame);
-        void     endFrame(VkCommandBuffer commandBuffer, uint32_t currentFrame, uint32_t imageIndex);
+        uint32_t BeginFrame(
+            const VulkanSwapchain  &swapchain,
+            const VulkanRenderPass &renderPass,
+            const VulkanSync       &sync,
+            VkCommandBuffer vkCommandBuffer,
+            uint32_t        currentFrame
+        );
+        void EndFrame(
+            const VulkanSwapchain &swapchain,
+            const VulkanSync      &sync,
+            VkCommandBuffer vkCommandBuffer,
+            uint32_t        currentFrame,
+            uint32_t        imageIndex
+        );
 
         // Pipeline Getters
-        VkPipeline       getPipeline() const { return m_handle; }
-        VkPipelineLayout getLayout()   const { return m_layout; }
+        VkPipeline       GetPipeline() const { return m_handle; }
+        VkPipelineLayout GetLayout()   const { return m_layout; }
 
     private:
-        // Pipeline
+        VulkanPipeline(
+            const VulkanDevice &device,
+            VkPipeline       handle,
+            VkPipelineLayout layout,
+            std::unique_ptr<VulkanShaderModule> vertexShaderModule,
+            std::unique_ptr<VulkanShaderModule> pixelShaderModule
+        );
+
+        // Remove Copying Semantics
+        VulkanPipeline(const VulkanPipeline&) = delete;
+        VulkanPipeline& operator=(const VulkanPipeline&) = delete;
+        
+        // Safe Move Semantics
+        VulkanPipeline(VulkanPipeline &&other) noexcept;
+        VulkanPipeline& operator=(VulkanPipeline &&other) noexcept;
+
+        void Cleanup();
+
+        const VulkanDevice &m_device;
+
         VkPipeline       m_handle = VK_NULL_HANDLE;
         VkPipelineLayout m_layout = VK_NULL_HANDLE;
 
-        // Descriptions
-        std::vector<VkVertexInputBindingDescription>   m_bindingDescs;
-        std::vector<VkVertexInputAttributeDescription> m_attrDescs;
-        std::vector<VkDescriptorSetLayout>             m_layoutDescs;
-
         // Shader Modules
-        std::unique_ptr<ShaderModule> m_vertexShaderModule;
-        std::unique_ptr<ShaderModule> m_pixelShaderModule;
-
-        const Context         &m_context;
-        const Swapchain       &m_swapchain;
-        const RenderPass      &m_renderPass;
-        const Synchronization &m_synchronization;
+        std::unique_ptr<VulkanShaderModule> m_vertexShaderModule;
+        std::unique_ptr<VulkanShaderModule> m_pixelShaderModule;
 };

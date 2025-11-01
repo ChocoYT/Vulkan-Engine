@@ -1,30 +1,31 @@
 #include "Vulkan/RenderPass/RenderPass.hpp"
 
-#include "Vulkan/Core/Context.hpp"
-#include "Vulkan/Core/Device.hpp"
+#include <iostream>
 
+#include "Vulkan/Core/Device.hpp"
 #include "Vulkan/Swapchain/Swapchain.hpp"
 
-RenderPass::RenderPass(
-    const Context   &context,
-    const Swapchain &swapchain
-) : m_context(context), m_swapchain(swapchain) {}
+VulkanRenderPass::VulkanRenderPass(
+    const VulkanDevice &device,
+    VkRenderPass handle
+) : m_device(device),
+    m_handle(handle)
+{}
 
-RenderPass::~RenderPass()
+VulkanRenderPass::~VulkanRenderPass()
 {
-    cleanup();
+    Cleanup();
 }
 
-void RenderPass::init()
-{
-    VkDevice vkDevice          = m_context.getDevice().getHandle();
-    VkFormat vkSwapchainFormat = m_swapchain.getFormat();
-
+std::unique_ptr<VulkanRenderPass> VulkanRenderPass::Create(
+    const VulkanDevice    &device,
+    const VulkanSwapchain &swapchain
+) {
     VkResult result = VK_SUCCESS;
 
     // Color Attachment
     VkAttachmentDescription colorAttachment{};
-    colorAttachment.format         = vkSwapchainFormat;
+    colorAttachment.format         = swapchain.GetFormat();
     colorAttachment.samples        = VK_SAMPLE_COUNT_1_BIT;
     colorAttachment.loadOp         = VK_ATTACHMENT_LOAD_OP_CLEAR;
     colorAttachment.storeOp        = VK_ATTACHMENT_STORE_OP_STORE;
@@ -62,7 +63,9 @@ void RenderPass::init()
     renderPassInfo.dependencyCount = 1;
     renderPassInfo.pDependencies   = &dependency; 
 
-    result = vkCreateRenderPass(vkDevice, &renderPassInfo, nullptr, &m_handle);
+    // Create Render Pass
+    VkRenderPass handle = VK_NULL_HANDLE;
+    result = vkCreateRenderPass(device.GetHandle(), &renderPassInfo, nullptr, &handle);
     if (result != VK_SUCCESS)
     {
         std::cerr << "[ERROR]\t'vkCreateRenderPass' Failed with Error Code " << result << "\n";
@@ -71,15 +74,42 @@ void RenderPass::init()
     }
 
     std::cout << "[INFO]\tRender Pass Created Successfully.\n";
+
+    return std::unique_ptr<VulkanRenderPass>(
+        new VulkanRenderPass(
+            device,
+            handle
+        )
+    );
 }
 
-void RenderPass::cleanup()
+void VulkanRenderPass::Cleanup()
 {
-    VkDevice vkDevice = m_context.getDevice().getHandle();
-
+    // Destroy Render Pass
     if (m_handle != VK_NULL_HANDLE)
     {
-        vkDestroyRenderPass(vkDevice, m_handle, nullptr);
+        vkDestroyRenderPass(m_device.GetHandle(), m_handle, nullptr);
         m_handle = VK_NULL_HANDLE;
     }
+}
+
+VulkanRenderPass::VulkanRenderPass(VulkanRenderPass &&other) noexcept :
+    m_device(other.m_device),
+    m_handle(other.m_handle)
+{
+    other.m_handle = VK_NULL_HANDLE;
+}
+
+VulkanRenderPass& VulkanRenderPass::operator=(VulkanRenderPass &&other) noexcept
+{
+    if (this != &other)
+    {
+        Cleanup();
+        
+        m_handle = other.m_handle;
+
+        other.m_handle = VK_NULL_HANDLE;
+    }
+
+    return *this;
 }

@@ -2,31 +2,48 @@
 
 #include <vulkan/vulkan.h>
 
-#include <iostream>
+#include <memory>
 #include <vector>
 
-class Context;
+class VulkanPhysicalDevice;
+class VulkanDevice;
+class VulkanCommandPool;
 
-class CommandPool
+class VulkanCommandPool
 {
     public:
-        CommandPool(const Context &context);
-        ~CommandPool();
+        ~VulkanCommandPool();
 
-        void init();
-        void cleanup();
+        static std::unique_ptr<VulkanCommandPool> Create(
+            const VulkanDevice &device
+        );
 
-        void createCommandBuffers(uint32_t frameCount);
-        VkCommandBuffer beginFrame(uint32_t currentFrame);
+        void CreateCommandBuffers(uint32_t frameCount);
+        VkCommandBuffer BeginFrame(uint32_t currentFrame);
 
-        VkCommandPool getHandle() const { return m_handle; }
+        VkCommandPool GetHandle() const { return m_handle; }
 
-        const std::vector<VkCommandBuffer>& getCommandBuffers() const { return m_commandBuffers; }
+        const std::vector<VkCommandBuffer>& GetCommandBuffers() const { return m_commandBuffers; }
 
     private:
-        std::vector<VkCommandBuffer> m_commandBuffers;
+        VulkanCommandPool(
+            const VulkanDevice &device,
+            VkCommandPool handle
+        );
+
+        void Cleanup();
+
+        // Remove Copying Semantics
+        VulkanCommandPool(const VulkanCommandPool&) = delete;
+        VulkanCommandPool& operator=(const VulkanCommandPool&) = delete;
+        
+        // Safe Move Semantics
+        VulkanCommandPool(VulkanCommandPool &&other) noexcept;
+        VulkanCommandPool& operator=(VulkanCommandPool &&other) noexcept;
+
+        const VulkanDevice &m_device;
 
         VkCommandPool m_handle = VK_NULL_HANDLE;
 
-        const Context &m_context;
+        std::vector<VkCommandBuffer> m_commandBuffers;
 };

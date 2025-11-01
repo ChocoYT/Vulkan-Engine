@@ -1,24 +1,39 @@
 #pragma once
 
+#include <memory>
+
 #include <vulkan/vulkan.h>
 
-#include <iostream>
+class VulkanInstance;
 
-class Context;
-
-class Debug
+class VulkanDebug
 {
     public:
-        Debug(const Context &context);
-        ~Debug();
+        ~VulkanDebug();
 
-        void init();
-        void cleanup();
+        static std::unique_ptr<VulkanDebug> Create(
+            const VulkanInstance &instance
+        );
 
-        const VkDebugUtilsMessengerEXT getHandle() const { return m_handle; }
+        const VkDebugUtilsMessengerEXT GetHandle() const { return m_handle; }
 
     private:
-        VkDebugUtilsMessengerEXT m_handle = VK_NULL_HANDLE;
+        VulkanDebug(
+            const VulkanInstance     &instance,
+            VkDebugUtilsMessengerEXT handle
+        );
 
-        const Context &m_context;
+        // Remove Copying Semantics
+        VulkanDebug(const VulkanDebug&) = delete;
+        VulkanDebug& operator=(const VulkanDebug&) = delete;
+        
+        // Safe Move Semantics
+        VulkanDebug(VulkanDebug &&other) noexcept;
+        VulkanDebug& operator=(VulkanDebug &&other) noexcept;
+
+        void Cleanup();
+
+        const VulkanInstance &m_instance;
+
+        VkDebugUtilsMessengerEXT m_handle = VK_NULL_HANDLE;
 };

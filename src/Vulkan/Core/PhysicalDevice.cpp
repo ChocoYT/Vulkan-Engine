@@ -1,22 +1,31 @@
 #include "Vulkan/Core/PhysicalDevice.hpp"
 
-#include "Vulkan/Core/Context.hpp"
+#include <iostream>
+#include <vector>
+
 #include "Vulkan/Core/Instance.hpp"
 #include "Vulkan/Core/Surface.hpp"
 
-PhysicalDevice::PhysicalDevice(const Context &context) : m_context(context) {}
-PhysicalDevice::~PhysicalDevice() {}
+VulkanPhysicalDevice::VulkanPhysicalDevice(
+    VkPhysicalDevice handle,
+    uint32_t         graphicsQueueFamily,
+    uint32_t         presentQueueFamily
+) : m_handle(handle),
+    m_graphicsQueueFamily(graphicsQueueFamily),
+    m_presentQueueFamily(presentQueueFamily)
+{}
 
-void PhysicalDevice::init()
-{
-    VkInstance   instance = m_context.getInstance().getHandle();
-    VkSurfaceKHR surface  = m_context.getSurface().getHandle();
+VulkanPhysicalDevice::~VulkanPhysicalDevice() = default;
 
+std::unique_ptr<VulkanPhysicalDevice> VulkanPhysicalDevice::Create(
+    const VulkanInstance &instance,
+    const VulkanSurface  &surface
+) {
     VkResult result = VK_SUCCESS;
 
     uint32_t deviceCount = 0;
-
-    result = vkEnumeratePhysicalDevices(instance, &deviceCount, nullptr);
+    
+    result = vkEnumeratePhysicalDevices(instance.GetHandle(), &deviceCount, nullptr);
     if (deviceCount == 0 || result != VK_SUCCESS)
     {
         std::cerr << "[ERROR]\t'vkEnumeratePhysicalDevices' Failed with Error Code " << result << "\n";
@@ -25,51 +34,92 @@ void PhysicalDevice::init()
     }
 
     std::vector<VkPhysicalDevice> devices(deviceCount);
-    vkEnumeratePhysicalDevices(instance, &deviceCount, devices.data());
+    vkEnumeratePhysicalDevices(instance.GetHandle(), &deviceCount, devices.data());
+
+    VkPhysicalDevice handle              = VK_NULL_HANDLE;
+    uint32_t         graphicsQueueFamily = VK_QUEUE_FAMILY_IGNORED;
+    uint32_t         presentQueueFamily  = VK_QUEUE_FAMILY_IGNORED;
 
     for (const auto &deviceCandidate : devices)
     {
-        if (PhysicalDevice::isDeviceSuitable(surface, deviceCandidate))
+        QueueFamilyIndices indices = VulkanPhysicalDevice::FindQueueFamilies(surface.GetHandle(), deviceCandidate);
+        if (indices.isComplete())
         {
-            m_handle = deviceCandidate;
+            handle              = deviceCandidate;
+            graphicsQueueFamily = indices.graphicsFamily.value();
+            presentQueueFamily  = indices.presentFamily.value();
             break;
         }
     }
 
-    if (m_handle == VK_NULL_HANDLE)
+    if (handle == VK_NULL_HANDLE)
         throw std::runtime_error("Failed to find a Suitable GPU.");
     
     std::cout << "[INFO]\tPhysical Device Selected Successfully.\n";
+
+    return std::unique_ptr<VulkanPhysicalDevice>(
+        new VulkanPhysicalDevice(
+            handle,
+            graphicsQueueFamily,
+            presentQueueFamily
+        )
+    );
 }
 
-bool PhysicalDevice::isDeviceSuitable(VkSurfaceKHR surface, VkPhysicalDevice device)
+bool VulkanPhysicalDevice::IsDeviceSuitable(VkSurfaceKHR vkSurface, VkPhysicalDevice vkPhysicalDevice)
 {
-    findQueueFamilies(surface, device);
+    QueueFamilyIndices indices = FindQueueFamilies(vkSurface, vkPhysicalDevice);
 
-    return m_graphicsQueueFamily != UINT32_MAX && m_presentQueueFamily != UINT32_MAX;
+    return indices.isComplete();
 }
 
-void PhysicalDevice::findQueueFamilies(VkSurfaceKHR surface, VkPhysicalDevice device)
+QueueFamilyIndices VulkanPhysicalDevice::FindQueueFamilies(VkSurfaceKHR vkSurface, VkPhysicalDevice vkPhysicalDevice)
 {
     uint32_t queueFamilyCount = 0;
-    vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, nullptr);
+    vkGetPhysicalDeviceQueueFamilyProperties(vkPhysicalDevice, &queueFamilyCount, nullptr);
 
     std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
-    vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies.data());
+    vkGetPhysicalDeviceQueueFamilyProperties(vkPhysicalDevice, &queueFamilyCount, queueFamilies.data());
 
+    QueueFamilyIndices indices;
     for (uint32_t i = 0; i < queueFamilies.size(); ++i)
     {
         const auto &queueFamily = queueFamilies[i];
         
         if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)
-            m_graphicsQueueFamily = i;
+            indices.graphicsFamily = i;
 
         VkBool32 presentSupport = false;
-        vkGetPhysicalDeviceSurfaceSupportKHR(device, i, surface, &presentSupport);
+        vkGetPhysicalDeviceSurfaceSupportKHR(vkPhysicalDevice, i, vkSurface, &presentSupport);
+        
         if (presentSupport)
-            m_presentQueueFamily = i;
+            indices.presentFamily = i;
 
-        if (m_graphicsQueueFamily != UINT32_MAX && m_presentQueueFamily != UINT32_MAX)
+        if (indices.isComplete())
             break;
     }
+
+    return indices;
+}
+
+VulkanPhysicalDevice::VulkanPhysicalDevice(VulkanPhysicalDevice &&other) noexcept : 
+    m_handle(other.m_handle),
+    m_graphicsQueueFamily(other.m_graphicsQueueFamily),
+    m_presentQueueFamily(other.m_presentQueueFamily)
+{
+    other = VulkanPhysicalDevice{};
+}
+
+VulkanPhysicalDevice& VulkanPhysicalDevice::operator=(VulkanPhysicalDevice &&other) noexcept
+{
+    if (this != &other)
+    {
+        m_handle              = other.m_handle;
+        m_graphicsQueueFamily = other.m_graphicsQueueFamily;
+        m_presentQueueFamily  = other.m_presentQueueFamily;
+
+        other = VulkanPhysicalDevice{};
+    }
+
+    return *this;
 }

@@ -1,49 +1,101 @@
 #include "Scene/Scene.hpp"
 
-#include "Renderer/Renderer.hpp"
-#include "Vulkan/Pipeline/Pipeline.hpp"
-
 #include "Scene/Camera.hpp"
 #include "Scene/Mesh.hpp"
 
-Scene::Scene() = default;
-Scene::~Scene()
+VulkanScene::VulkanScene(
+    std::unique_ptr<Camera> camera,
+    std::vector<std::vector<VkDescriptorSet>> descriptorSets,
+    std::vector<VkDescriptorSetLayout>        descriptorSetLayouts
+) : m_camera(std::move(camera)),
+    m_descriptorSets(std::move(descriptorSets)),
+    m_descriptorSetLayouts(std::move(descriptorSetLayouts))
+{};
+
+VulkanScene::~VulkanScene()
 {
-    cleanup();
+    Cleanup();
 }
 
-void Scene::init()
-{
-    std::unique_ptr<Mesh> mesh;
-    mesh = std::make_unique<Mesh>();
+std::unique_ptr<VulkanScene> VulkanScene::Create(
+    const VulkanPhysicalDevice  &physicalDevice,
+    const VulkanDevice          &device,
+    const VulkanDescriptorPool  &descriptorPool,
+    VulkanMemoryAllocator       &allocator,
+    uint32_t frameCount
+) {
+    // Camera
+    auto camera = Camera::Create(
+        physicalDevice,
+        device,
+        descriptorPool,
+        allocator,
+        glm::vec3(0.0f, 0.0f, 2.0f), glm::vec3(0.0f, -90.0f, 0.0f),
+        CAMERA_FOV, CAMERA_NEAR, CAMERA_FAR
+    );
 
-    std::vector<Vertex> vertices = {
-        Vertex(glm::vec3( 0.0f, -0.5f, 0.0f), glm::vec3(1.0f, 0.0f, 0.0f)),
-        Vertex(glm::vec3( 0.5f,  0.5f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f)),
-        Vertex(glm::vec3(-0.5f,  0.5f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f))
-    };
-    std::vector<uint32_t> indices = {
-        0, 1, 2
-    };
-    mesh->init(vertices, indices, FRAMES_IN_FLIGHT);
+    // Descriptor Sets
+    std::vector<std::vector<VkDescriptorSet>> descriptorSets;
+    for (uint32_t currentFrame = 0; currentFrame < frameCount; ++currentFrame)
+    {
+        std::vector<VkDescriptorSet> frameDescriptorSets;
+        frameDescriptorSets.emplace_back(camera->GetDescriptorSet(currentFrame));
 
-    m_meshes.emplace_back(mesh);
+        descriptorSets.emplace_back(std::move(frameDescriptorSets));
+    }
+
+    // Descriptor Set Layouts
+    std::vector<VkDescriptorSetLayout> descriptorSetLayouts;
+    descriptorSetLayouts.emplace_back(camera->GetDescriptorSetLayout());
+
+    return std::unique_ptr<VulkanScene>(
+        new VulkanScene(
+            std::move(camera),
+            std::move(descriptorSets),
+            std::move(descriptorSetLayouts)
+        )
+    );
 }
 
-void Scene::cleanup()
+void VulkanScene::Cleanup()
 {
-    // Destroy Meshes
-    for (auto &mesh : m_meshes)
-        mesh->cleanup();
-
     m_meshes.clear();
 
-    // Destroy Camera
-    m_camera->cleanup();
+    m_descriptorSets.clear();
+    m_descriptorSetLayouts.clear();
 }
 
-void Scene::update(double deltaTime)
-{
+void VulkanScene::Update(
+    const Window &window,
+    double   deltaTime,
+    uint32_t currentFrame
+) {
     // Update Camera
-    m_camera->update(deltaTime);
+    m_camera->Update(window, deltaTime);
+    m_camera->UpdateBuffer(window, currentFrame);
+}
+
+VulkanScene::VulkanScene(VulkanScene&& other) noexcept : 
+    m_camera(std::move(other.m_camera)),
+    m_meshes(std::move(other.m_meshes)),
+    m_descriptorSets(std::move(other.m_descriptorSets)),
+    m_descriptorSetLayouts(std::move(other.m_descriptorSetLayouts))
+{
+    other = VulkanScene{};
+}
+
+VulkanScene& VulkanScene::operator=(VulkanScene &&other) noexcept
+{
+    if (this != &other)
+    {
+        Cleanup(); 
+
+        m_camera = std::move(other.m_camera);
+        m_meshes = std::move(other.m_meshes);
+        m_descriptorSets       = std::move(other.m_descriptorSets);
+        m_descriptorSetLayouts = std::move(other.m_descriptorSetLayouts);
+
+        other = VulkanScene{};
+    }
+    return *this;
 }

@@ -2,41 +2,66 @@
 
 #include "Vulkan/Resources/Buffer.hpp"
 
-StagingBuffer::StagingBuffer(
-    const Context     &context,
-    const CommandPool &commandPool,
-    MemoryAllocator   &allocator
-) : m_context(context), m_commandPool(commandPool), m_allocator(allocator) {}
+VulkanStagingBuffer::VulkanStagingBuffer(
+    std::unique_ptr<VulkanBuffer> buffer,
+    VkDeviceSize size
+) : m_buffer(std::move(buffer)),
+    m_size(size)
+{}
 
-StagingBuffer::~StagingBuffer()
-{
-    cleanup();
-}
+VulkanStagingBuffer::~VulkanStagingBuffer() = default;
 
-void StagingBuffer::init(VkDeviceSize bufferSize)
-{
-    m_bufferSize = bufferSize;
-
+std::unique_ptr<VulkanStagingBuffer> VulkanStagingBuffer::Create(
+    const VulkanPhysicalDevice &physicalDevice,
+    const VulkanDevice         &device,
+    VulkanMemoryAllocator      &allocator,
+    VkDeviceSize size
+) {
     // Initialize Staging Buffer
-    m_buffer = std::make_unique<Buffer>(m_context, m_commandPool, m_allocator);
-    m_buffer->init(
-        m_bufferSize,
+    auto buffer = VulkanBuffer::Create(
+        physicalDevice,
+        device,
+        allocator,
+        size,
         VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
     );
+
+    return std::unique_ptr<VulkanStagingBuffer>(
+        new VulkanStagingBuffer(
+            std::move(buffer),
+            size
+        )
+    );
 }
 
-void StagingBuffer::cleanup()
+void VulkanStagingBuffer::Update(void *data)
 {
-    m_buffer->cleanup();
+    m_buffer->Update(data, m_size);
 }
 
-void StagingBuffer::update(void *bufferData)
-{
-    m_buffer->update(bufferData, m_bufferSize);
+void VulkanStagingBuffer::CopyTo(
+    const VulkanCommandPool &commandPool,
+    const VulkanBuffer      &dst
+) {
+    m_buffer->CopyTo(commandPool, dst);
 }
 
-void StagingBuffer::copyTo(const Buffer &dst)
+VulkanStagingBuffer::VulkanStagingBuffer(VulkanStagingBuffer&& other) noexcept : 
+    m_size(other.m_size),
+    m_buffer(std::move(other.m_buffer))
 {
-    m_buffer->copyTo(dst);
+    other = VulkanStagingBuffer{};
+}
+
+VulkanStagingBuffer& VulkanStagingBuffer::operator=(VulkanStagingBuffer &&other) noexcept
+{
+    if (this != &other)
+    {
+        m_size   = other.m_size;
+        m_buffer = std::move(other.m_buffer);
+
+        other = VulkanStagingBuffer{};
+    }
+    return *this;
 }

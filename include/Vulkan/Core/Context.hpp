@@ -1,45 +1,58 @@
 #pragma once
 
-#define GLFW_INCLUDE_VULKAN
-#include <GLFW/glfw3.h>
+#include <cstdint>
+#include <memory>
+
 #include <vulkan/vulkan.h>
 
-#include <iostream>
-#include <memory>
-#include <set>
-#include <stdexcept>
-#include <vector>
+#include "Settings.hpp"
 
 class Window;
 
-class Instance;
-class Debug;
-class Surface;
-class PhysicalDevice;
-class Device;
+class VulkanInstance;
+class VulkanDebug;
+class VulkanSurface;
+class VulkanPhysicalDevice;
+class VulkanDevice;
 
-class Context
+class VulkanContext
 {
     public:
-        Context(const Window &window);
-        ~Context();
+        ~VulkanContext();
 
-        void init(uint32_t frameCount);
-        void cleanup();
+        static std::unique_ptr<VulkanContext> Create(
+            const Window &window,
+            uint32_t frameCount
+        );
 
         // Getters
-        const Instance&       getInstance()       const { return *m_instance;       }
-        const Surface&        getSurface()        const { return *m_surface;        }
-        const PhysicalDevice& getPhysicalDevice() const { return *m_physicalDevice; }
-        const Device&         getDevice()         const { return *m_device;         }
+        const VulkanInstance&       GetInstance()       const { return *m_instance;       }
+        const VulkanDebug&          GetDebug()          const { return *m_debug;          }
+        const VulkanSurface&        GetSurface()        const { return *m_surface;        }
+        const VulkanPhysicalDevice& GetPhysicalDevice() const { return *m_physicalDevice; }
+        const VulkanDevice&         GetDevice()         const { return *m_device;         }
 
     private:
-        // Objects
-        std::unique_ptr<Instance>       m_instance;
-        std::unique_ptr<Debug>          m_debug;
-        std::unique_ptr<Surface>        m_surface;
-        std::unique_ptr<PhysicalDevice> m_physicalDevice;
-        std::unique_ptr<Device>         m_device;
+        VulkanContext(
+            std::unique_ptr<VulkanInstance>       instance,
+            std::unique_ptr<VulkanDebug>          debug,
+            std::unique_ptr<VulkanSurface>        surface,
+            std::unique_ptr<VulkanPhysicalDevice> physicalDevice,
+            std::unique_ptr<VulkanDevice>         device
+        );
 
-        const Window &m_window;
+        // Remove Copying Semantics
+        VulkanContext(const VulkanContext&) = delete;
+        VulkanContext& operator=(const VulkanContext&) = delete;
+        
+        // Safe Move Semantics
+        VulkanContext(VulkanContext &&other) noexcept;
+        VulkanContext& operator=(VulkanContext &&other) noexcept;
+
+        // Objects
+        std::unique_ptr<VulkanInstance>       m_instance;
+        std::unique_ptr<VulkanDebug>          m_debug;
+        std::unique_ptr<VulkanSurface>        m_surface;
+        std::unique_ptr<VulkanPhysicalDevice> m_physicalDevice;
+        std::unique_ptr<VulkanDevice>         m_device;
 };

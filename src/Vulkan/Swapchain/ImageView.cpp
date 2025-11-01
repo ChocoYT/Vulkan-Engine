@@ -3,41 +3,49 @@
 #include <iostream>
 #include <stdexcept>
 
-#include "Vulkan/Core/Context.hpp"
 #include "Vulkan/Core/Device.hpp"
+#include "Vulkan/Resources/Image.hpp"
 
-ImageView::ImageView(const Context &context) : m_context(context) {}
-ImageView::~ImageView()
+VulkanImageView::VulkanImageView(
+    const VulkanDevice &device,
+    VkImageView handle
+) : m_device(device),
+    m_handle(handle)
+{}
+
+VulkanImageView::~VulkanImageView()
 {
-    cleanup();
+    Cleanup();
 }
 
-void ImageView::init(
-    VkImage  vkImage,
-    VkFormat vkFormat
+std::unique_ptr<VulkanImageView> VulkanImageView::CreateFromImage(
+    const VulkanDevice &device,
+    const VulkanImage  &image,
+    VkImageViewType    viewType,
+    VkImageAspectFlags aspectMask
 ) {
-    VkDevice vkDevice = m_context.getDevice().getHandle();
-
     VkResult result = VK_SUCCESS;
 
     VkImageViewCreateInfo createInfo{};
     createInfo.sType    = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-    createInfo.image    = vkImage;
-    createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-    createInfo.format   = vkFormat;
+    createInfo.image    = image.GetHandle();
+    createInfo.viewType = viewType;
+    createInfo.format   = image.GetFormat();
 
     createInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
     createInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
     createInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
     createInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
     
-    createInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    createInfo.subresourceRange.aspectMask = aspectMask;
     createInfo.subresourceRange.baseMipLevel = 0;
-    createInfo.subresourceRange.levelCount = 1;
+    createInfo.subresourceRange.levelCount = image.GetMipLevels();
     createInfo.subresourceRange.baseArrayLayer = 0;
-    createInfo.subresourceRange.layerCount = 1;
+    createInfo.subresourceRange.layerCount = image.GetArrayLayers();
     
-    result = vkCreateImageView(vkDevice, &createInfo, nullptr, &m_handle);
+    // Create Image View
+    VkImageView handle = VK_NULL_HANDLE;
+    result = vkCreateImageView(device.GetHandle(), &createInfo, nullptr, &handle);
     if (result != VK_SUCCESS)
     {
         std::cerr << "[ERROR]\t'vkCreateImageView' Failed with Error Code " << result << "\n";
@@ -46,15 +54,41 @@ void ImageView::init(
     }
 
     std::cout << "[INFO]\tSwapchain Image Views Created Successfully.\n";
+
+    return std::unique_ptr<VulkanImageView>(
+        new VulkanImageView(
+            device,
+            handle
+        )
+    );
 }
 
-void ImageView::cleanup()
+void VulkanImageView::Cleanup()
 {
-    VkDevice vkDevice = m_context.getDevice().getHandle();
-
     if (m_handle != VK_NULL_HANDLE)
     {
-        vkDestroyImageView(vkDevice, m_handle, nullptr);
+        vkDestroyImageView(m_device.GetHandle(), m_handle, nullptr);
         m_handle = VK_NULL_HANDLE;
     }
+}
+
+VulkanImageView::VulkanImageView(VulkanImageView &&other) noexcept : 
+    m_device(other.m_device),
+    m_handle(other.m_handle)
+{
+    other.m_handle = VK_NULL_HANDLE;
+}
+
+VulkanImageView& VulkanImageView::operator=(VulkanImageView &&other) noexcept
+{
+    if (this != &other)
+    {
+        Cleanup();
+        
+        m_handle = other.m_handle;
+
+        other.m_handle = VK_NULL_HANDLE;
+    }
+
+    return *this;
 }

@@ -7,33 +7,67 @@
 
 #include "Settings.hpp"
 
-class Renderer;
+class Window;
+class VulkanPhysicalDevice;
+class VulkanDevice;
+class VulkanMemoryAllocator;
+class VulkanDescriptorPool;
 
 class Camera;
-class Mesh;
+class VulkanMesh;
 
-class UniformBuffer;
-
-class Scene
+class VulkanScene
 {
     public:
-        Scene();
-        ~Scene();
+        ~VulkanScene();
 
-        void init();
-        void cleanup();
+        static std::unique_ptr<VulkanScene> Create(
+            const VulkanPhysicalDevice  &physicalDevice,
+            const VulkanDevice          &device,
+            const VulkanDescriptorPool  &descriptorPool,
+            VulkanMemoryAllocator       &allocator,
+            uint32_t frameCount
+        );
         
-        void update(double deltaTime);
-
-        // Setters
-        void setCamera(std::unique_ptr<Camera>& camera) { m_camera = std::move(camera); }
+        void Update(
+            const Window &window,
+            double   deltaTime,
+            uint32_t currentFrame
+        );
+        
+        void AddMesh(std::unique_ptr<VulkanMesh> mesh)
+        {
+            m_meshes.emplace_back(std::move(mesh));
+        }
 
         // Getters
-        const std::unique_ptr<Camera>&            getCamera() const { return m_camera; }
-        const std::vector<std::unique_ptr<Mesh>>& getMeshes() const { return m_meshes; }
+        const std::unique_ptr<Camera>&                  GetCamera() const { return m_camera; }
+        const std::vector<std::unique_ptr<VulkanMesh>>& GetMeshes() const { return m_meshes; }
+
+        const std::vector<VkDescriptorSet>&       GetDescriptorSets(uint32_t currentFrame) const { return m_descriptorSets[currentFrame]; }
+        const std::vector<VkDescriptorSetLayout>& GetDescriptorSetLayouts()                const { return m_descriptorSetLayouts; }
 
     private:
-        std::vector<std::unique_ptr<Mesh>> m_meshes;
+        VulkanScene() = default;
+        VulkanScene(
+            std::unique_ptr<Camera> camera,
+            std::vector<std::vector<VkDescriptorSet>> descriptorSets,
+            std::vector<VkDescriptorSetLayout>        descriptorSetLayouts
+        );
 
-        std::unique_ptr<Camera> m_camera;
+        // Remove Copying Semantics
+        VulkanScene(const VulkanScene&) = delete;
+        VulkanScene& operator=(const VulkanScene&) = delete;
+        
+        // Safe Move Semantics
+        VulkanScene(VulkanScene &&other) noexcept;
+        VulkanScene& operator=(VulkanScene &&other) noexcept;
+        
+        void Cleanup();
+
+        std::unique_ptr<Camera>                  m_camera;
+        std::vector<std::unique_ptr<VulkanMesh>> m_meshes;
+
+        std::vector<std::vector<VkDescriptorSet>> m_descriptorSets;
+        std::vector<VkDescriptorSetLayout>        m_descriptorSetLayouts;
 };

@@ -1,35 +1,50 @@
 #include "Vulkan/Core/Device.hpp"
 
-#include "Vulkan/Core/Context.hpp"
+#include <iostream>
+#include <set>
+#include <vector>
+
 #include "Vulkan/Core/PhysicalDevice.hpp"
 
-Device::Device(const Context &context) : m_context(context) {}
-Device::~Device()
+VulkanDevice::VulkanDevice(
+    VkDevice handle,
+    VkQueue  graphicsQueue,
+    VkQueue  presentQueue,
+    uint32_t graphicsQueueFamily,
+    uint32_t presentQueueFamily
+) : m_handle(handle),
+    m_graphicsQueue(graphicsQueue),
+    m_presentQueue(presentQueue),
+    m_graphicsQueueFamily(graphicsQueueFamily),
+    m_presentQueueFamily(presentQueueFamily)
+{}
+
+VulkanDevice::~VulkanDevice()
 {
-    cleanup();
+    Cleanup();
 }
 
-void Device::init()
-{
-    VkPhysicalDevice physicalDevice = m_context.getPhysicalDevice().getHandle();
-    
-    uint32_t graphicsQueueFamily = m_context.getPhysicalDevice().getGraphicsQueueFamily();
-    uint32_t presentQueueFamily  = m_context.getPhysicalDevice().getPresentQueueFamily();
-
+std::unique_ptr<VulkanDevice> VulkanDevice::Create(
+    const VulkanPhysicalDevice &physicalDevice
+) {
     VkResult result = VK_SUCCESS;
 
     float queuePriority = 1.0f;
 
     std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
-    std::set<uint32_t> uniqueQueueFamilies = { graphicsQueueFamily, presentQueueFamily };
+    std::set<uint32_t> uniqueQueueFamilies = {
+        physicalDevice.GetGraphicsQueueFamily(),
+        physicalDevice.GetPresentQueueFamily()
+    };
 
     for (uint32_t queueFamily : uniqueQueueFamilies)
     {
         VkDeviceQueueCreateInfo queueCreateInfo{};
-        queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+        queueCreateInfo.sType            = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
         queueCreateInfo.queueFamilyIndex = queueFamily;
-        queueCreateInfo.queueCount = 1;
+        queueCreateInfo.queueCount       = 1;
         queueCreateInfo.pQueuePriorities = &queuePriority;
+        
         queueCreateInfos.push_back(queueCreateInfo);
     }
 
@@ -50,7 +65,9 @@ void Device::init()
     createInfo.enabledExtensionCount = static_cast<uint32_t>(deviceExtensions.size());
     createInfo.ppEnabledExtensionNames = deviceExtensions.data();
 
-    result = vkCreateDevice(physicalDevice, &createInfo, nullptr, &m_handle);
+    // Create Logical Device
+    VkDevice handle;
+    result = vkCreateDevice(physicalDevice.GetHandle(), &createInfo, nullptr, &handle);
     if (result != VK_SUCCESS)
     {
         std::cerr << "[ERROR]\t'vkCreateDevice' Failed with Error Code " << result << "\n";
@@ -59,17 +76,57 @@ void Device::init()
     }
     
     // Get Queue Handles
-    vkGetDeviceQueue(m_handle, graphicsQueueFamily, 0, &m_graphicsQueue);
-    vkGetDeviceQueue(m_handle, presentQueueFamily, 0, &m_presentQueue);
+    VkQueue graphicsQueue = 0;
+    VkQueue presentQueue  = 0;
+    vkGetDeviceQueue(handle, physicalDevice.GetGraphicsQueueFamily(), 0, &graphicsQueue);
+    vkGetDeviceQueue(handle, physicalDevice.GetPresentQueueFamily(), 0, &presentQueue);
 
     std::cout << "[INFO]\tLogical Device Created Successfully.\n";
+
+    return std::unique_ptr<VulkanDevice>(
+        new VulkanDevice(
+            handle,
+            graphicsQueue,
+            presentQueue,
+            physicalDevice.GetGraphicsQueueFamily(),
+            physicalDevice.GetPresentQueueFamily()
+        )
+    );
 }
 
-void Device::cleanup()
+void VulkanDevice::Cleanup()
 {
     if (m_handle != VK_NULL_HANDLE)
     {
         vkDestroyDevice(m_handle, nullptr);
         m_handle = VK_NULL_HANDLE;
     }
+}
+
+VulkanDevice::VulkanDevice(VulkanDevice &&other) noexcept : 
+    m_handle(other.m_handle),
+    m_graphicsQueue(other.m_graphicsQueue),
+    m_presentQueue(other.m_presentQueue),
+    m_graphicsQueueFamily(other.m_graphicsQueueFamily),
+    m_presentQueueFamily(other.m_presentQueueFamily)
+{
+    other = VulkanDevice{};
+}
+
+VulkanDevice& VulkanDevice::operator=(VulkanDevice &&other) noexcept
+{
+    if (this != &other)
+    {
+        Cleanup();
+        
+        m_handle              = other.m_handle;
+        m_graphicsQueue       = other.m_graphicsQueue;
+        m_presentQueue        = other.m_presentQueue;
+        m_graphicsQueueFamily = other.m_graphicsQueueFamily;
+        m_presentQueueFamily  = other.m_presentQueueFamily;
+
+        other = VulkanDevice{};
+    }
+
+    return *this;
 }

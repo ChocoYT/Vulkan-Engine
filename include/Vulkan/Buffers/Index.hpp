@@ -5,46 +5,64 @@
 
 #include <vulkan/vulkan.h>
 
-class Context;
-class CommandPool;
-class MemoryAllocator;
+class VulkanPhysicalDevice;
+class VulkanDevice;
+class VulkanCommandPool;
+class VulkanMemoryAllocator;
 
-class Buffer;
-class StagingBuffer;
+class VulkanBuffer;
+class VulkanStagingBuffer;
 
-class IndexBuffer
+class VulkanIndexBuffer
 {
     public:
-        IndexBuffer(
-            const Context     &context,
-            const CommandPool &commandPool,
-            MemoryAllocator   &allocator
-        );
-        ~IndexBuffer();
+        ~VulkanIndexBuffer();
 
-        void init(
-            VkDeviceSize bufferSize,
-            uint32_t     bufferCount
+        static std::unique_ptr<VulkanIndexBuffer> Create(
+            const VulkanPhysicalDevice &physicalDevice,
+            const VulkanDevice         &device,
+            VulkanMemoryAllocator      &allocator,
+            VkDeviceSize size,
+            uint32_t     count
         );
-        void cleanup();
 
-        void bind(
-            VkCommandBuffer commandBuffer,
+        void Bind(
+            VkCommandBuffer vkCommandBuffer,
             uint32_t        currentFrame
         );
-        void update(
-            void     *bufferData,
+        
+        void Update(
+            const VulkanCommandPool &commandPool,
+            void     *data,
             uint32_t currentFrame
         );
+        
+        // Getters
+        VkDeviceSize GetSize()  const { return m_size; }
+        uint32_t     GetCount() const { return m_count; }
 
     private:
-        std::vector<std::unique_ptr<Buffer>>        m_buffers;
-        std::vector<std::unique_ptr<StagingBuffer>> m_stagingBuffers;
+        VulkanIndexBuffer() = default;
+        VulkanIndexBuffer(
+            std::vector<std::unique_ptr<VulkanBuffer>>        buffers,
+            std::vector<std::unique_ptr<VulkanStagingBuffer>> stagingBuffers,
+            VkDeviceSize size,
+            uint32_t     count
+        );
 
-        VkDeviceSize m_bufferSize  = 0;
-        uint32_t     m_bufferCount = 0;
+        // Remove Copying Semantics
+        VulkanIndexBuffer(const VulkanIndexBuffer&) = delete;
+        VulkanIndexBuffer& operator=(const VulkanIndexBuffer&) = delete;
+        
+        // Safe Move Semantics
+        VulkanIndexBuffer(VulkanIndexBuffer &&other) noexcept;
+        VulkanIndexBuffer& operator=(VulkanIndexBuffer &&other) noexcept;
 
-        const Context     &m_context;
-        const CommandPool &m_commandPool;
-        MemoryAllocator   &m_allocator;
+        void Cleanup();
+
+        std::vector<std::unique_ptr<VulkanBuffer>>        m_buffers;
+        std::vector<std::unique_ptr<VulkanStagingBuffer>> m_stagingBuffers;
+
+        VkDeviceSize m_size  = 0;
+        uint32_t     m_count = 0;
 };

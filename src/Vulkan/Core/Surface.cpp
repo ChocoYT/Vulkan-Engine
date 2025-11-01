@@ -1,28 +1,34 @@
 #include "Vulkan/Core/Surface.hpp"
 
-#include "window.hpp"
+#include <iostream>
 
-#include "Vulkan/Core/Context.hpp"
+#define GLFW_INCLUDE_VULKAN
+#include <GLFW/glfw3.h>
+
+#include "Window/Window.hpp"
 #include "Vulkan/Core/Instance.hpp"
 
-Surface::Surface(
-    const Window  &window,
-    const Context &context
-) : m_window(window), m_context(context) {}
+VulkanSurface::VulkanSurface(
+    const VulkanInstance &instance,
+    VkSurfaceKHR         handle
+) : m_instance(instance),
+    m_handle(handle)
+{}
 
-Surface::~Surface()
+VulkanSurface::~VulkanSurface()
 {
-    cleanup();
+    Cleanup();
 }
 
-void Surface::init()
-{
-    GLFWwindow *window  = m_window.getHandle();
-    VkInstance instance = m_context.getInstance().getHandle();
-
+std::unique_ptr<VulkanSurface> VulkanSurface::Create(
+    const Window         &window,
+    const VulkanInstance &instance
+) {
     VkResult result = VK_SUCCESS;
     
-    result = glfwCreateWindowSurface(instance, window, nullptr, &m_handle);
+    // Create Surface
+    VkSurfaceKHR handle = VK_NULL_HANDLE;
+    result = glfwCreateWindowSurface(instance.GetHandle(), window.GetHandle(), nullptr, &handle);
     if (result != VK_SUCCESS)
     {
         std::cerr << "[ERROR]\t'glfwCreateWindowSurface' Failed with Error Code " << result << "\n";
@@ -31,15 +37,41 @@ void Surface::init()
     }
     
     std::cout << "[INFO]\tVulkan Surface Created Successfully.\n";
+    
+    return std::unique_ptr<VulkanSurface>(
+        new VulkanSurface(
+            instance,
+            handle
+        )
+    );
 }
 
-void Surface::cleanup()
+void VulkanSurface::Cleanup()
 {
-    VkInstance instance = m_context.getInstance().getHandle();
-
     if (m_handle != VK_NULL_HANDLE)
     {
-        vkDestroySurfaceKHR(instance, m_handle, nullptr);
+        vkDestroySurfaceKHR(m_instance.GetHandle(), m_handle, nullptr);
         m_handle = VK_NULL_HANDLE;
     }
+}
+
+VulkanSurface::VulkanSurface(VulkanSurface &&other) noexcept : 
+    m_instance(other.m_instance),
+    m_handle(other.m_handle)
+{
+    other.m_handle = VK_NULL_HANDLE;
+}
+
+VulkanSurface& VulkanSurface::operator=(VulkanSurface &&other) noexcept
+{
+    if (this != &other)
+    {
+        Cleanup();
+        
+        m_handle = other.m_handle;
+
+        other.m_handle = VK_NULL_HANDLE;
+    }
+
+    return *this;
 }

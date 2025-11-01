@@ -1,13 +1,12 @@
 #include "Vulkan/Resources/MemoryAllocator.hpp"
 
-#include "Vulkan/Core/Context.hpp"
 #include "Vulkan/Core/Device.hpp"
 #include "Vulkan/Core/PhysicalDevice.hpp"
 
 #include <iostream>
 #include <stdexcept>
 
-struct MemoryAllocation
+struct VulkanMemoryAllocation
 {
     VkDeviceMemory memory = VK_NULL_HANDLE;
     VkDeviceSize   offset = 0;
@@ -15,49 +14,54 @@ struct MemoryAllocation
     void* pMappedData     = nullptr;
 };
 
-MemoryAllocator::MemoryAllocator(const Context &context) : m_context(context) {}
-MemoryAllocator::~MemoryAllocator() = default;
+VulkanMemoryAllocator::~VulkanMemoryAllocator() = default;
 
-void MemoryAllocator::free(AllocationHandle handle)
+std::unique_ptr<VulkanMemoryAllocator> VulkanMemoryAllocator::Create()
 {
-    VkDevice vkDevice = m_context.getDevice().getHandle();
+    return std::unique_ptr<VulkanMemoryAllocator>(
+        new VulkanMemoryAllocator
+    );
+}
 
-    MemoryAllocation* allocation = static_cast<MemoryAllocation*>(handle);
+void VulkanMemoryAllocator::Free(
+    const VulkanDevice     &device,
+    VulkanAllocationHandle allocationHandle
+) {
+    VulkanMemoryAllocation* allocation = static_cast<VulkanMemoryAllocation*>(allocationHandle);
 
     if (allocation == nullptr) return;
     
     if (allocation->pMappedData != nullptr) {
-        unmap(allocation);
+        Unmap(device, allocation);
         allocation->pMappedData = nullptr;
     }
 
     if (allocation->memory != VK_NULL_HANDLE) {
-        vkFreeMemory(vkDevice, allocation->memory, nullptr);
+        vkFreeMemory(device.GetHandle(), allocation->memory, nullptr);
         allocation->memory = VK_NULL_HANDLE;
     }
     
     delete allocation;
 }
 
-AllocationHandle MemoryAllocator::allocate(
+VulkanAllocationHandle VulkanMemoryAllocator::Allocate(
+    const VulkanPhysicalDevice &physicalDevice,
+    const VulkanDevice         &device,
     VkDeviceSize          size,
     uint32_t              memoryTypeBits,
     VkMemoryPropertyFlags properties
 ) {
-    VkDevice vkDevice = m_context.getDevice().getHandle();
-
     VkResult result = VK_SUCCESS;
     
-    uint32_t memoryTypeIndex = findMemoryType(memoryTypeBits, properties);
+    uint32_t memoryTypeIndex = FindMemoryType(physicalDevice, memoryTypeBits, properties);
 
     VkMemoryAllocateInfo allocInfo{};
     allocInfo.sType           = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
     allocInfo.allocationSize  = size;
     allocInfo.memoryTypeIndex = memoryTypeIndex;
     
-    VkDeviceMemory memoryHandle = VK_NULL_HANDLE;
-
-    result = vkAllocateMemory(vkDevice, &allocInfo, nullptr, &memoryHandle);
+    VkDeviceMemory memory = VK_NULL_HANDLE;
+    result = vkAllocateMemory(device.GetHandle(), &allocInfo, nullptr, &memory);
     if (result != VK_SUCCESS)
     {
         std::cerr << "[ERROR]\t'vkAllocateMemory' Failed with Error Code " << result << "\n";
@@ -65,31 +69,31 @@ AllocationHandle MemoryAllocator::allocate(
         throw std::runtime_error("Failed to Allocate Memory.");
     }
 
-    MemoryAllocation* allocation = new MemoryAllocation{};
-    allocation->memory = memoryHandle;
+    VulkanMemoryAllocation* allocation = new VulkanMemoryAllocation{};
+    allocation->memory = memory;
     allocation->size   = size;
     allocation->offset = 0;
 
-    return static_cast<AllocationHandle>(allocation);
+    return static_cast<VulkanAllocationHandle>(allocation);
 }
 
-void* MemoryAllocator::map(AllocationHandle handle)
-{
-    MemoryAllocation* allocation = static_cast<MemoryAllocation*>(handle);
+void* VulkanMemoryAllocator::Map(
+    const VulkanDevice     &device,
+    VulkanAllocationHandle allocationHandle
+) {
+    VulkanMemoryAllocation* allocation = static_cast<VulkanMemoryAllocation*>(allocationHandle);
 
     if (allocation == nullptr) return nullptr;
     
     if (allocation->pMappedData)
         return allocation->pMappedData;
 
-    VkDevice vkDevice = m_context.getDevice().getHandle();
-
     VkResult result = VK_SUCCESS;
 
     void* hostData = nullptr;
     
     result = vkMapMemory(
-        vkDevice,
+        device.GetHandle(),
         allocation->memory,
         allocation->offset,
         allocation->size,
@@ -108,46 +112,44 @@ void* MemoryAllocator::map(AllocationHandle handle)
     return hostData;
 }
 
-void MemoryAllocator::unmap(AllocationHandle handle)
-{
-    MemoryAllocation* allocation = static_cast<MemoryAllocation*>(handle);
+void VulkanMemoryAllocator::Unmap(
+    const VulkanDevice     &device,
+    VulkanAllocationHandle allocationHandle
+) {
+    VulkanMemoryAllocation* allocation = static_cast<VulkanMemoryAllocation*>(allocationHandle);
 
     if (allocation              == nullptr) return;
     if (allocation->pMappedData == nullptr) return;
 
-    VkDevice vkDevice = m_context.getDevice().getHandle();
-
-    vkUnmapMemory(vkDevice, allocation->memory);
+    vkUnmapMemory(device.GetHandle(), allocation->memory);
 
     allocation->pMappedData = nullptr;
 }
 
-void MemoryAllocator::bindBuffer(
-    VkBuffer         vkBuffer, 
-    AllocationHandle handle
+void VulkanMemoryAllocator::BindBuffer(
+    const VulkanDevice     &device,
+    VkBuffer               handle, 
+    VulkanAllocationHandle allocationHandle
 ) {
-    VkDevice vkDevice = m_context.getDevice().getHandle();
-
-    vkBindBufferMemory(vkDevice, vkBuffer, static_cast<MemoryAllocation*>(handle)->memory, 0);
+    vkBindBufferMemory(device.GetHandle(), handle, static_cast<VulkanMemoryAllocation*>(allocationHandle)->memory, 0);
 }
 
-void MemoryAllocator::bindImage(
-    VkImage          vkImage, 
-    AllocationHandle handle
+void VulkanMemoryAllocator::BindImage(
+    const VulkanDevice     &device,
+    VkImage                handle, 
+    VulkanAllocationHandle allocationHandle
 ) {
-    VkDevice vkDevice = m_context.getDevice().getHandle();
-
-    vkBindImageMemory(vkDevice, vkImage, static_cast<MemoryAllocation*>(handle)->memory, 0);
+    vkBindImageMemory(device.GetHandle(), handle, static_cast<VulkanMemoryAllocation*>(allocationHandle)->memory, 0);
 }
 
-uint32_t MemoryAllocator::findMemoryType(
+uint32_t VulkanMemoryAllocator::FindMemoryType(
+    const VulkanPhysicalDevice &physicalDevice,
     uint32_t              typeFilter, 
     VkMemoryPropertyFlags properties
 ) const {
-    VkPhysicalDevice vkPhysicalDevice = m_context.getPhysicalDevice().getHandle();
 
     VkPhysicalDeviceMemoryProperties memProperties;
-    vkGetPhysicalDeviceMemoryProperties(vkPhysicalDevice, &memProperties);
+    vkGetPhysicalDeviceMemoryProperties(physicalDevice.GetHandle(), &memProperties);
 
     for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++)
     {

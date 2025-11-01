@@ -1,17 +1,25 @@
 #include "Window/Window.hpp"
 
-Window::Window() = default;
-Window::~Window()
-{
-    cleanup();
-}
+#include <stdexcept>
 
-void Window::init(int width, int height, const std::string &name)
-{
-    this->width  = width;
-    this->height = height;
-    this->name   = &name;
+Window::Window(
+    GLFWwindow *handle,
+    int width,
+    int height,
+    const std::string &name
+) : handle(handle),
+    width(width),
+    height(height),
+    name(&name)
+{}
 
+Window::~Window() = default;
+
+std::unique_ptr<Window> Window::Create(
+    int width,
+    int height,
+    const std::string &name
+) {
     // Initialize GLFW
     if (!glfwInit())
         throw std::runtime_error("GLFW not Initialized Correctly.");
@@ -20,16 +28,12 @@ void Window::init(int width, int height, const std::string &name)
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 
-    handle = glfwCreateWindow(width, height, name.c_str(), nullptr, nullptr);
+    GLFWwindow *handle = glfwCreateWindow(width, height, name.c_str(), nullptr, nullptr);
     if (!handle)
     {
         glfwTerminate();
         throw std::runtime_error("Window not Initialized Correctly.");
     }
-}
 
-void Window::cleanup()
-{
-    glfwDestroyWindow(handle);
-    glfwTerminate();
+    return std::unique_ptr<Window>(new Window(handle, width, height, name));
 }

@@ -1,31 +1,41 @@
 #pragma once
 
-#define GLFW_INCLUDE_VULKAN
-#include <GLFW/glfw3.h>
+#include <memory>
+
 #include <vulkan/vulkan.h>
 
-#include <iostream>
-
 class Window;
-class Context;
+class VulkanInstance;
 
-class Surface
+class VulkanSurface
 {
     public:
-        Surface(
-            const Window  &window,
-            const Context &context
+        ~VulkanSurface();
+
+        static std::unique_ptr<VulkanSurface> Create(
+            const Window         &window,
+            const VulkanInstance &instance
         );
-        ~Surface();
 
-        void init();
-        void cleanup();
-
-        const VkSurfaceKHR getHandle() const { return m_handle; }
+        const VkSurfaceKHR GetHandle() const { return m_handle; }
 
     private:
-        VkSurfaceKHR m_handle = VK_NULL_HANDLE;
+        VulkanSurface(
+            const VulkanInstance &instance,
+            VkSurfaceKHR         handle
+        );
 
-        const Window  &m_window;
-        const Context &m_context;
+        // Remove Copying Semantics
+        VulkanSurface(const VulkanSurface&) = delete;
+        VulkanSurface& operator=(const VulkanSurface&) = delete;
+        
+        // Safe Move Semantics
+        VulkanSurface(VulkanSurface &&other) noexcept;
+        VulkanSurface& operator=(VulkanSurface &&other) noexcept;
+
+        void Cleanup();
+
+        const VulkanInstance &m_instance;
+
+        VkSurfaceKHR m_handle = VK_NULL_HANDLE;
 };

@@ -1,18 +1,26 @@
 #include "Vulkan/Descriptors/DescriptorPool.hpp"
 
-#include "Vulkan/Core/Context.hpp"
+#include <iostream>
+#include <vector>
+
 #include "Vulkan/Core/Device.hpp"
 
-DescriptorPool::DescriptorPool(const Context &context) : m_context(context) {}
-DescriptorPool::~DescriptorPool()
+VulkanDescriptorPool::VulkanDescriptorPool(
+    const VulkanDevice &device,
+    VkDescriptorPool handle
+) : m_device(device),
+    m_handle(handle)
+{}
+
+VulkanDescriptorPool::~VulkanDescriptorPool()
 {
-    cleanup();
+    Cleanup();
 }
 
-void DescriptorPool::init(uint32_t frameCount)
-{
-    VkDevice vkDevice = m_context.getDevice().getHandle();
-
+std::unique_ptr<VulkanDescriptorPool> VulkanDescriptorPool::Create(
+    const VulkanDevice &device,
+    uint32_t frameCount
+) {
     VkResult result = VK_SUCCESS;
 
     std::vector<VkDescriptorPoolSize> poolSizes(1);
@@ -25,7 +33,8 @@ void DescriptorPool::init(uint32_t frameCount)
     poolInfo.pPoolSizes    = poolSizes.data();
     poolInfo.maxSets       = frameCount;
 
-    result = vkCreateDescriptorPool(vkDevice, &poolInfo, nullptr, &m_handle);
+    VkDescriptorPool handle = VK_NULL_HANDLE;
+    result = vkCreateDescriptorPool(device.GetHandle(), &poolInfo, nullptr, &handle);
     if (result != VK_SUCCESS)
     {
         std::cerr << "[ERROR]\t'vkCreateDescriptorPool' Failed with Error Code " << result << "\n";
@@ -34,15 +43,42 @@ void DescriptorPool::init(uint32_t frameCount)
     }
 
     std::cout << "[INFO]\tDescriptor Pool Created Successfully.\n";
+
+    return std::unique_ptr<VulkanDescriptorPool>(
+        new VulkanDescriptorPool(
+            device,
+            handle
+        )
+    );
 }
 
-void DescriptorPool::cleanup()
+void VulkanDescriptorPool::Cleanup()
 {
-    VkDevice vkDevice = m_context.getDevice().getHandle();
-
+    // Destroy Descriptor Pool
     if (m_handle != VK_NULL_HANDLE)
     {
-        vkDestroyDescriptorPool(vkDevice, m_handle, nullptr);
+        vkDestroyDescriptorPool(m_device.GetHandle(), m_handle, nullptr);
         m_handle = VK_NULL_HANDLE;
     }
+}
+
+VulkanDescriptorPool::VulkanDescriptorPool(VulkanDescriptorPool &&other) noexcept :
+    m_device(other.m_device),
+    m_handle(other.m_handle)
+{
+    other.m_handle = VK_NULL_HANDLE;
+}
+
+VulkanDescriptorPool& VulkanDescriptorPool::operator=(VulkanDescriptorPool &&other) noexcept
+{
+    if (this != &other)
+    {
+        Cleanup();
+        
+        m_handle = other.m_handle;
+
+        other.m_handle = VK_NULL_HANDLE;
+    }
+
+    return *this;
 }

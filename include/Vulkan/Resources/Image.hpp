@@ -4,60 +4,92 @@
 
 #include <vulkan/vulkan.h>
 
-using AllocationHandle = void*;
+using VulkanAllocationHandle = void*;
 
-class Context;
-class MemoryAllocator;
+class VulkanPhysicalDevice;
+class VulkanDevice;
+class VulkanMemoryAllocator;
 
-class Image
+class VulkanImage
 {
-public:
-    Image(
-        const Context   &context,
-        MemoryAllocator &allocator
-    );
-    ~Image();
+    public:
+        ~VulkanImage();
 
-    void init(
-        VkExtent3D extent,
-        VkFormat   format,
-        uint32_t mipLevels,
-        uint32_t arrayLayers,
-        VkImageTiling         tiling,
-        VkImageUsageFlags     usage,
-        VkMemoryPropertyFlags properties,
-        VkImage               externalHandle = VK_NULL_HANDLE
-    );
-    void cleanup();
+        static std::unique_ptr<VulkanImage> Create(
+            const VulkanPhysicalDevice &physicalDevice,
+            const VulkanDevice         &device,
+            VulkanMemoryAllocator      &allocator,
+            VkExtent3D            extent,
+            VkFormat              format,
+            uint32_t              mipLevels,
+            uint32_t              arrayLayers,
+            VkImageTiling         tiling,
+            VkImageUsageFlags     usage,
+            VkMemoryPropertyFlags properties,
+            VkImage               externalHandle = VK_NULL_HANDLE
+        );
 
-    void transitionLayout(
-        VkCommandBuffer    commandBuffer,
-        VkImageLayout      oldLayout,
-        VkImageLayout      newLayout,
-        VkImageAspectFlags aspectMask,
-        uint32_t mipLevels   = 1,
-        uint32_t arrayLayers = 1
-    );
+        void TransitionLayout(
+            VkCommandBuffer    commandBuffer,
+            VkImageLayout      oldLayout,
+            VkImageLayout      newLayout,
+            VkImageAspectFlags aspectMask,
+            uint32_t mipLevels   = 1,
+            uint32_t arrayLayers = 1
+        );
 
-    const VkImage          getHandle()           const { return m_handle;           }
-    const AllocationHandle getAllocationHandle() const { return m_allocationHandle; }
+        const VkImage                GetHandle()           const { return m_handle;           }
+        const VulkanAllocationHandle GetAllocationHandle() const { return m_allocationHandle; }
 
-    VkFormat getFormat() const { return m_format; }
-    
-private:
-    VkImage          m_handle           = VK_NULL_HANDLE;
-    AllocationHandle m_allocationHandle = nullptr;
+        VkExtent3D            GetExtent()      const { return m_extent; }
+        VkFormat              GetFormat()      const { return m_format; }
+        uint32_t              GetMipLevels()   const { return m_mipLevels; }
+        uint32_t              GetArrayLayers() const { return m_arrayLayers; }
+        VkImageTiling         GetTiling()      const { return m_tiling; }
+        VkImageUsageFlags     GetUsage()       const { return m_usage; }
+        VkMemoryPropertyFlags GetProperties()  const { return m_properties; }
 
-    VkExtent3D            m_extent{0, 0, 0};
-    VkFormat              m_format      = VK_FORMAT_UNDEFINED;
-    uint32_t              m_mipLevels   = 1;
-    uint32_t              m_arrayLayers = 1;
-    VkImageTiling         m_tiling      = VK_IMAGE_TILING_OPTIMAL;
-    VkImageUsageFlags     m_usage       = 0;
-    VkMemoryPropertyFlags m_properties  = 0;
+        bool IsSwapchainImage() const { return m_isSwapchainImage; }
+        
+    private:
+        VulkanImage(
+            const VulkanDevice    &device,
+            VulkanMemoryAllocator &allocator,
+            VkImage                handle,
+            VulkanAllocationHandle allocationHandle,
+            VkExtent3D             extent,
+            VkFormat               format,
+            uint32_t               mipLevels,
+            uint32_t               arrayLayers,
+            VkImageTiling          tiling,
+            VkImageUsageFlags      usage,
+            VkMemoryPropertyFlags  properties,
+            bool isSwapchainImage
+        );
 
-    bool m_isSwapchainImage = false;
+        // Remove Copying Semantics
+        VulkanImage(const VulkanImage&) = delete;
+        VulkanImage& operator=(const VulkanImage&) = delete;
+        
+        // Safe Move Semantics
+        VulkanImage(VulkanImage &&other) noexcept;
+        VulkanImage& operator=(VulkanImage &&other) noexcept;
 
-    const Context   &m_context;
-    MemoryAllocator &m_allocator;
+        void Cleanup();
+
+        const VulkanDevice    &m_device;
+        VulkanMemoryAllocator &m_allocator;
+
+        VkImage                m_handle           = VK_NULL_HANDLE;
+        VulkanAllocationHandle m_allocationHandle = nullptr;
+
+        VkExtent3D            m_extent{0, 0, 0};
+        VkFormat              m_format      = VK_FORMAT_UNDEFINED;
+        uint32_t              m_mipLevels   = 1;
+        uint32_t              m_arrayLayers = 1;
+        VkImageTiling         m_tiling      = VK_IMAGE_TILING_OPTIMAL;
+        VkImageUsageFlags     m_usage       = 0;
+        VkMemoryPropertyFlags m_properties  = 0;
+
+        bool m_isSwapchainImage = false;
 };

@@ -2,15 +2,14 @@
 #include <iostream>
 #include <stdexcept>
 
-#include "app.hpp"
+#include "App.hpp"
 
 int main()
 {
     try {
-        App app;
+        App app = App::Create();
         
-        app.init();
-        app.run();
+        app.Run();
     }
     catch (const std::exception &exception)
     {

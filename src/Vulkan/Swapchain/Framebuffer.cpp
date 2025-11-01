@@ -3,28 +3,27 @@
 #include <iostream>
 #include <stdexcept>
 
-#include "Vulkan/Core/Context.hpp"
 #include "Vulkan/Core/Device.hpp"
-
 #include "Vulkan/RenderPass/RenderPass.hpp"
 
-Framebuffer::Framebuffer(
-    const Context    &context,
-    const RenderPass &renderPass
-) : m_context(context), m_renderPass(renderPass) {}
+VulkanFramebuffer::VulkanFramebuffer(
+    const VulkanDevice &device,
+    VkFramebuffer handle
+) : m_device(device),
+    m_handle(handle)
+{}
 
-Framebuffer::~Framebuffer()
+VulkanFramebuffer::~VulkanFramebuffer()
 {
-    cleanup();
+    Cleanup();
 }
 
-void Framebuffer::init(
+std::unique_ptr<VulkanFramebuffer> VulkanFramebuffer::Create(
+    const VulkanDevice             &device,
+    const VulkanRenderPass         &renderPass,
     const std::vector<VkImageView> &attachments,
     VkExtent2D extent
 ) {
-    VkDevice     vkDevice     = m_context.getDevice().getHandle();
-    VkRenderPass vkRenderPass = m_renderPass.getHandle();
-
     VkResult result = VK_SUCCESS;
 
     std::vector<VkImageView> vkAttachments;
@@ -35,14 +34,16 @@ void Framebuffer::init(
 
     VkFramebufferCreateInfo framebufferInfo{};
     framebufferInfo.sType           = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-    framebufferInfo.renderPass      = vkRenderPass;
+    framebufferInfo.renderPass      = renderPass.GetHandle();
     framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
     framebufferInfo.pAttachments    = vkAttachments.data();
     framebufferInfo.width           = extent.width;
     framebufferInfo.height          = extent.height;
     framebufferInfo.layers          = 1;
 
-    result = vkCreateFramebuffer(vkDevice, &framebufferInfo, nullptr, &m_handle);
+    // Create Framebuffer
+    VkFramebuffer handle = VK_NULL_HANDLE;
+    result = vkCreateFramebuffer(device.GetHandle(), &framebufferInfo, nullptr, &handle);
     if (result != VK_SUCCESS)
     {
         std::cerr << "[ERROR]\t'vkCreateFramebuffer' Failed with Error Code " << result << "\n";
@@ -51,15 +52,41 @@ void Framebuffer::init(
     }
 
     std::cout << "[INFO]\tSwapchain Framebuffers Created Successfully.\n";
+
+    return std::unique_ptr<VulkanFramebuffer>(
+        new VulkanFramebuffer(
+            device,
+            handle
+        )
+    );
 }
 
-void Framebuffer::cleanup()
+void VulkanFramebuffer::Cleanup()
 {
-    VkDevice vkDevice = m_context.getDevice().getHandle();
-
     if (m_handle != VK_NULL_HANDLE)
     {
-        vkDestroyFramebuffer(vkDevice, m_handle, nullptr);
+        vkDestroyFramebuffer(m_device.GetHandle(), m_handle, nullptr);
         m_handle = VK_NULL_HANDLE;
     }
+}
+
+VulkanFramebuffer::VulkanFramebuffer(VulkanFramebuffer &&other) noexcept : 
+    m_device(other.m_device),
+    m_handle(other.m_handle)
+{
+    other.m_handle = VK_NULL_HANDLE;
+}
+
+VulkanFramebuffer& VulkanFramebuffer::operator=(VulkanFramebuffer &&other) noexcept
+{
+    if (this != &other)
+    {
+        Cleanup();
+        
+        m_handle = other.m_handle;
+
+        other.m_handle = VK_NULL_HANDLE;
+    }
+
+    return *this;
 }

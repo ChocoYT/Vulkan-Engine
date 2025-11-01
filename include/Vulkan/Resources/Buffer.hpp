@@ -1,55 +1,72 @@
 #pragma once
 
-#include <algorithm>
-#include <cstring>
-#include <iostream>
-#include <stdexcept>
+#include <memory>
 
 #include <vulkan/vulkan.h>
 
-using AllocationHandle = void*;
+using VulkanAllocationHandle = void*;
 
-class Context;
-class CommandPool;
-class MemoryAllocator;
+class VulkanPhysicalDevice;
+class VulkanDevice;
+class VulkanMemoryAllocator;
+class VulkanCommandPool;
 
-class Buffer
+class VulkanBuffer
 {
     public:
-        Buffer(
-            const Context     &context,
-            const CommandPool &commandPool,
-            MemoryAllocator   &allocator
-        );
-        ~Buffer();
+        ~VulkanBuffer();
 
-        void init(
-            VkDeviceSize          bufferSize,
+        static std::unique_ptr<VulkanBuffer> Create(
+            const VulkanPhysicalDevice &physicalDevice,
+            const VulkanDevice         &device,
+            VulkanMemoryAllocator      &allocator,
+            VkDeviceSize          size,
             VkBufferUsageFlags    usage,
             VkMemoryPropertyFlags properties
         );
-        void cleanup();
 
-        void update(
-            const void   *srcData,
-            VkDeviceSize dataSize
+        void Update(
+            const void   *data,
+            VkDeviceSize size
         );
-        void copyTo(const Buffer &dst);
+        void CopyTo(
+            const VulkanCommandPool &commandPool,
+            const VulkanBuffer      &dst
+        );
 
-        const VkBuffer         getHandle()           const { return m_handle;           }
-        const AllocationHandle getAllocationHandle() const { return m_allocationHandle; }
-
-        const VkDeviceSize getSize() const { return m_size; }
+        const VkBuffer               GetHandle()           const { return m_handle; }
+        const VulkanAllocationHandle GetAllocationHandle() const { return m_allocationHandle; }
+        const VkDeviceSize           GetSize()             const { return m_size; }
+        const VkBufferUsageFlags     GetUsage()            const { return m_usage; }
+        const VkMemoryPropertyFlags  GetProperties()       const { return m_properties; }
 
     private:
-        VkBuffer         m_handle           = VK_NULL_HANDLE;
-        AllocationHandle m_allocationHandle = nullptr;
+        VulkanBuffer(
+            const VulkanDevice     &device,
+            VulkanMemoryAllocator  &allocator,
+            VkBuffer               handle,
+            VulkanAllocationHandle allocationHandle,
+            VkDeviceSize           size,
+            VkBufferUsageFlags     usage,
+            VkMemoryPropertyFlags  properties
+        );
 
-        VkDeviceSize          m_size       = 0;
-        VkBufferUsageFlags    m_usage      = 0;
-        VkMemoryPropertyFlags m_properties = 0;
+        // Remove Copying Semantics
+        VulkanBuffer(const VulkanBuffer&) = delete;
+        VulkanBuffer& operator=(const VulkanBuffer&) = delete;
+        
+        // Safe Move Semantics
+        VulkanBuffer(VulkanBuffer &&other) noexcept;
+        VulkanBuffer& operator=(VulkanBuffer &&other) noexcept;
 
-        const Context     &m_context;
-        const CommandPool &m_commandPool;
-        MemoryAllocator   &m_allocator;
+        void Cleanup();
+
+        const VulkanDevice    &m_device;
+        VulkanMemoryAllocator &m_allocator;
+
+        VkBuffer               m_handle           = VK_NULL_HANDLE;
+        VulkanAllocationHandle m_allocationHandle = nullptr;
+        VkDeviceSize           m_size       = 0;
+        VkBufferUsageFlags     m_usage      = 0;
+        VkMemoryPropertyFlags  m_properties = 0;
 };

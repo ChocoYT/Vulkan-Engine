@@ -1,44 +1,53 @@
 #include "Vulkan/Resources/Buffer.hpp"
 
-#include "Vulkan/Core/Context.hpp"
-#include "Vulkan/Core/PhysicalDevice.hpp"
+#include <iostream>
+#include <stdexcept>
+
 #include "Vulkan/Core/Device.hpp"
-
 #include "Vulkan/Commands/CommandPool.hpp"
-
 #include "Vulkan/Resources/MemoryAllocator.hpp"
 
-Buffer::Buffer(
-    const Context     &context,
-    const CommandPool &commandPool,
-    MemoryAllocator   &allocator
-) : m_context(context), m_commandPool(commandPool), m_allocator(allocator) {}
+VulkanBuffer::VulkanBuffer(
+    const VulkanDevice     &device,
+    VulkanMemoryAllocator  &allocator,
+    VkBuffer               handle,
+    VulkanAllocationHandle allocationHandle,
+    VkDeviceSize           size,
+    VkBufferUsageFlags     usage,
+    VkMemoryPropertyFlags  properties
+) : m_device(device),
+    m_allocator(allocator),
+    m_handle(handle),
+    m_allocationHandle(allocationHandle),
+    m_size(size),
+    m_usage(usage),
+    m_properties(properties)
+{}
 
-Buffer::~Buffer()
+VulkanBuffer::~VulkanBuffer()
 {
-    cleanup();
+    Cleanup();
 }
 
-void Buffer::init(
-    VkDeviceSize          bufferSize,
+std::unique_ptr<VulkanBuffer> VulkanBuffer::Create(
+    const VulkanPhysicalDevice &physicalDevice,
+    const VulkanDevice         &device,
+    VulkanMemoryAllocator      &allocator,
+    VkDeviceSize          size,
     VkBufferUsageFlags    usage,
     VkMemoryPropertyFlags properties
 ) {
-    VkDevice vkDevice = m_context.getDevice().getHandle();
-
     VkResult result = VK_SUCCESS;
 
-    m_size       = bufferSize;
-    m_usage      = usage;
-    m_properties = properties;
-
     VkBufferCreateInfo bufferInfo{};
-    bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    bufferInfo.size  = m_size;
-    bufferInfo.usage = m_usage;
+    bufferInfo.sType       = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    bufferInfo.size        = size;
+    bufferInfo.usage       = usage;
     bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
     
-    result = vkCreateBuffer(vkDevice, &bufferInfo, nullptr, &m_handle);
+    // Create Buffer
+    VkBuffer handle;
+    result = vkCreateBuffer(device.GetHandle(), &bufferInfo, nullptr, &handle);
     if (result != VK_SUCCESS)
     {
         std::cerr << "[ERROR]\t'vkCreateBuffer' Failed with Error Code " << result << "\n";
@@ -48,68 +57,60 @@ void Buffer::init(
 
     // Query Requirements
     VkMemoryRequirements memRequirements;
-    vkGetBufferMemoryRequirements(vkDevice, m_handle, &memRequirements);
+    vkGetBufferMemoryRequirements(device.GetHandle(), handle, &memRequirements);
     
     // Allocate and Bind
-    m_allocationHandle = m_allocator.allocate(
+    VulkanAllocationHandle allocationHandle = allocator.Allocate(
+        physicalDevice,
+        device,
         memRequirements.size,
         memRequirements.memoryTypeBits,
-        m_properties
+        properties
     );
-    m_allocator.bindBuffer(m_handle, m_allocationHandle);
+    allocator.BindBuffer(device, handle, allocationHandle);
+
+    return std::unique_ptr<VulkanBuffer>(
+        new VulkanBuffer(
+            device,
+            allocator,
+            handle,
+            allocationHandle,
+            size,
+            usage,
+            properties
+        )
+    );
 }
 
-void Buffer::cleanup()
-{
-    VkDevice vkDevice = m_context.getDevice().getHandle();
-
-    // Destroy Buffer
-    if (m_handle != VK_NULL_HANDLE)
-    {
-        vkDestroyBuffer(vkDevice, m_handle, nullptr);
-        m_handle = VK_NULL_HANDLE;
-    }
-    
-    // Destroy Allocation Handle
-    if (m_allocationHandle != VK_NULL_HANDLE)
-    {
-        m_allocator.free(m_allocationHandle);
-        m_allocationHandle = nullptr;
-    }
-}
-
-void Buffer::update(
-    const void   *srcData,
-    VkDeviceSize dataSize
+void VulkanBuffer::Update(
+    const void   *data,
+    VkDeviceSize size
 ) {
-    if (dataSize > m_size)
+    if (size > m_size)
         throw std::runtime_error("Buffer cannot be updated because 'dataSize' is larger than the buffer's size.");
 
-    void *dstData = m_allocator.map(m_allocationHandle);
+    void *dstData = m_allocator.Map(m_device, m_allocationHandle);
 
-    std::memcpy(dstData, srcData, static_cast<size_t>(dataSize));
+    std::memcpy(dstData, data, static_cast<size_t>(size));
     
-    m_allocator.unmap(m_allocationHandle);
+    m_allocator.Unmap(m_device, m_allocationHandle);
 }
 
-void Buffer::copyTo(const Buffer &dst)
-{
-    if (dst.getSize() < m_size)
+void VulkanBuffer::CopyTo(
+    const VulkanCommandPool &commandPool,
+    const VulkanBuffer      &dst
+) {
+    if (dst.GetSize() < m_size)
         throw std::runtime_error("Buffer cannot be copied because the original buffer's size is smaller than 'dst.size'.");
 
-    VkDevice      device      = m_context.getDevice().getHandle();
-    VkCommandPool commandPool = m_commandPool.getHandle();
-
-    VkQueue graphicsQueue = m_context.getDevice().getGraphicsQueue();
-
     VkCommandBufferAllocateInfo allocInfo{};
-    allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    allocInfo.commandPool = commandPool;
+    allocInfo.sType              = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    allocInfo.level              = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    allocInfo.commandPool        = commandPool.GetHandle();
     allocInfo.commandBufferCount = 1;
 
     VkCommandBuffer commandBuffer;
-    vkAllocateCommandBuffers(device, &allocInfo, &commandBuffer);
+    vkAllocateCommandBuffers(m_device.GetHandle(), &allocInfo, &commandBuffer);
 
     VkCommandBufferBeginInfo beginInfo{};
     beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -120,7 +121,7 @@ void Buffer::copyTo(const Buffer &dst)
     copyRegion.srcOffset = 0;
     copyRegion.dstOffset = 0;
     copyRegion.size      = m_size;
-    vkCmdCopyBuffer(commandBuffer, m_handle, dst.getHandle(), 1, &copyRegion);
+    vkCmdCopyBuffer(commandBuffer, m_handle, dst.GetHandle(), 1, &copyRegion);
 
     vkEndCommandBuffer(commandBuffer);
 
@@ -129,8 +130,63 @@ void Buffer::copyTo(const Buffer &dst)
     submitInfo.commandBufferCount = 1;
     submitInfo.pCommandBuffers = &commandBuffer;
 
-    vkQueueSubmit(graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
-    vkQueueWaitIdle(graphicsQueue);
+    vkQueueSubmit(m_device.GetGraphicsQueue(), 1, &submitInfo, VK_NULL_HANDLE);
+    vkQueueWaitIdle(m_device.GetGraphicsQueue());
 
-    vkFreeCommandBuffers(device, commandPool, 1, &commandBuffer);
+    vkFreeCommandBuffers(m_device.GetHandle(), commandPool.GetHandle(), 1, &commandBuffer);
+}
+
+void VulkanBuffer::Cleanup()
+{
+    // Destroy Allocation Handle
+    if (m_allocationHandle != nullptr)
+    {
+        m_allocator.Free(m_device, m_allocationHandle);
+        m_allocationHandle = nullptr;
+    }
+
+    // Destroy Buffer
+    if (m_handle != VK_NULL_HANDLE)
+    {
+        vkDestroyBuffer(m_device.GetHandle(), m_handle, nullptr);
+        m_handle = VK_NULL_HANDLE;
+    }
+}
+
+VulkanBuffer::VulkanBuffer(VulkanBuffer &&other) noexcept : 
+    m_device(other.m_device),
+    m_allocator(other.m_allocator),
+    m_handle(other.m_handle),
+    m_allocationHandle(other.m_allocationHandle),
+    m_size(other.m_size),
+    m_usage(other.m_usage),
+    m_properties(other.m_properties)
+{
+    other.m_handle           = VK_NULL_HANDLE;
+    other.m_allocationHandle = nullptr;
+    other.m_size             = 0;
+    other.m_usage            = 0;
+    other.m_properties       = 0;
+}
+
+VulkanBuffer& VulkanBuffer::operator=(VulkanBuffer &&other) noexcept
+{
+    if (this != &other)
+    {
+        Cleanup();
+        
+        m_handle             = other.m_handle;
+        m_allocationHandle   = other.m_allocationHandle;
+        m_size               = other.m_size;
+        m_usage              = other.m_usage;
+        m_properties         = other.m_properties;
+
+        other.m_handle           = VK_NULL_HANDLE;
+        other.m_allocationHandle = nullptr;
+        other.m_size             = 0;
+        other.m_usage            = 0;
+        other.m_properties       = 0;
+    }
+
+    return *this;
 }

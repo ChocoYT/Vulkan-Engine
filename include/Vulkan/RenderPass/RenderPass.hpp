@@ -1,29 +1,41 @@
 #pragma once
 
+#include <memory>
+
 #include <vulkan/vulkan.h>
 
-#include <iostream>
+class VulkanDevice;
+class VulkanSwapchain;
 
-class Context;
-class Swapchain;
-
-class RenderPass
+class VulkanRenderPass
 {
     public:
-        RenderPass(
-            const Context   &context,
-            const Swapchain &swapchain
+        ~VulkanRenderPass();
+
+        static std::unique_ptr<VulkanRenderPass> Create(
+            const VulkanDevice    &device,
+            const VulkanSwapchain &swapchain
         );
-        ~RenderPass();
 
-        void init();
-        void cleanup();
-
-        const VkRenderPass getHandle() const { return m_handle; }
+        const VkRenderPass GetHandle() const { return m_handle; }
 
     private:
-        VkRenderPass m_handle = VK_NULL_HANDLE;
+        VulkanRenderPass(
+            const VulkanDevice &device,
+            VkRenderPass handle
+        );
 
-        const Context   &m_context;
-        const Swapchain &m_swapchain;
+        // Remove Copying Semantics
+        VulkanRenderPass(const VulkanRenderPass&) = delete;
+        VulkanRenderPass& operator=(const VulkanRenderPass&) = delete;
+        
+        // Safe Move Semantics
+        VulkanRenderPass(VulkanRenderPass &&other) noexcept;
+        VulkanRenderPass& operator=(VulkanRenderPass &&other) noexcept;
+
+        void Cleanup();
+
+        const VulkanDevice &m_device;
+
+        VkRenderPass m_handle = VK_NULL_HANDLE;
 };

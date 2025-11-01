@@ -1,33 +1,55 @@
 #pragma once
 
+#include <cstdint>
+#include <memory>
+
 #include <vulkan/vulkan.h>
 
-#include <iostream>
-#include <set>
-#include <vector>
+class VulkanPhysicalDevice;
 
-class Context;
-
-class Device
+class VulkanDevice
 {
     public:
-        Device(const Context &context);
-        ~Device();
+        static std::unique_ptr<VulkanDevice> Create(
+            const VulkanPhysicalDevice &physicalDevice
+        );
 
-        void init();
-        void cleanup();
+        ~VulkanDevice();
 
-        const VkDevice getHandle() const { return m_handle; }
+        const VkDevice GetHandle() const { return m_handle; }
 
-        const VkQueue getGraphicsQueue() const { return m_graphicsQueue; }
-        const VkQueue getPresentQueue()  const { return m_presentQueue;  }
+        const VkQueue  GetGraphicsQueue()       const { return m_graphicsQueue; }
+        const VkQueue  GetPresentQueue()        const { return m_presentQueue; }
+        const uint32_t GetGraphicsQueueFamily() const { return m_graphicsQueueFamily; }
+        const uint32_t GetPresentQueueFamily()  const { return m_presentQueueFamily; }
 
     private:
+        VulkanDevice() = default;
+        VulkanDevice(
+            VkDevice handle,
+            VkQueue  graphicsQueue,
+            VkQueue  presentQueue,
+            uint32_t graphicsQueueFamily,
+            uint32_t presentQueueFamily
+        );
+
+        // Remove Copying Semantics
+        VulkanDevice(const VulkanDevice&) = delete;
+        VulkanDevice& operator=(const VulkanDevice&) = delete;
+        
+        // Safe Move Semantics
+        VulkanDevice(VulkanDevice &&other) noexcept;
+        VulkanDevice& operator=(VulkanDevice &&other) noexcept;
+
+        void Cleanup();
+
+        VkDevice m_handle = VK_NULL_HANDLE;
+
         // Queues
         VkQueue m_graphicsQueue = VK_NULL_HANDLE;
         VkQueue m_presentQueue  = VK_NULL_HANDLE;
 
-        VkDevice m_handle = VK_NULL_HANDLE;
-
-        const Context &m_context;
+        // Queue Families
+        uint32_t m_graphicsQueueFamily = UINT32_MAX;
+        uint32_t m_presentQueueFamily  = UINT32_MAX;
 };

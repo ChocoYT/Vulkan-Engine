@@ -5,58 +5,56 @@
 #include <stdexcept>
 #include <string>
 
-#include "Vulkan/Core/Context.hpp"
 #include "Vulkan/Core/Device.hpp"
-
 #include "Vulkan/Swapchain/Swapchain.hpp"
 #include "Vulkan/Swapchain/Framebuffer.hpp"
-
 #include "Vulkan/RenderPass/RenderPass.hpp"
 
 #include "Vulkan/Pipeline/ShaderModule.hpp"
 
-#include "Vulkan/Synchronization/Synchronization.hpp"
-#include "Vulkan/Synchronization/Semaphore.hpp"
-#include "Vulkan/Synchronization/Fence.hpp"
+#include "Vulkan/Sync/Sync.hpp"
+#include "Vulkan/Sync/Semaphore.hpp"
+#include "Vulkan/Sync/Fence.hpp"
 
-Pipeline::Pipeline(
-    const Context         &context,
-    const Swapchain       &swapchain,
-    const RenderPass      &renderPass,
-    const Synchronization &synchronization
-) : m_context(context), m_swapchain(swapchain), m_renderPass(renderPass), m_synchronization(synchronization) {}
+VulkanPipeline::VulkanPipeline(
+    const VulkanDevice &device,
+    VkPipeline       handle,
+    VkPipelineLayout layout,
+    std::unique_ptr<VulkanShaderModule> vertexShaderModule,
+    std::unique_ptr<VulkanShaderModule> pixelShaderModule
+) : m_device(device),
+    m_handle(handle),
+    m_layout(layout),
+    m_vertexShaderModule(std::move(vertexShaderModule)),
+    m_pixelShaderModule(std::move(pixelShaderModule))
+{}
 
-Pipeline::~Pipeline()
+VulkanPipeline::~VulkanPipeline()
 {
-    cleanup();
+    Cleanup();
 }
 
-void Pipeline::init(
+std::unique_ptr<VulkanPipeline> VulkanPipeline::Create(
+    const VulkanDevice     &device,
+    const VulkanSwapchain  &swapchain,
+    const VulkanRenderPass &renderPass,
     std::vector<VkVertexInputBindingDescription>   &bindingDescs,
     std::vector<VkVertexInputAttributeDescription> &attrDescs,
     std::vector<VkDescriptorSetLayout>             &layoutDescs,
     uint32_t frameCount
 ) {
-    VkDevice deviceHandle = m_context.getDevice().getHandle();
-
     VkResult result = VK_SUCCESS;
 
-    m_bindingDescs = bindingDescs;
-    m_attrDescs    = attrDescs;
-    m_layoutDescs  = layoutDescs;
-
-    m_vertexShaderModule = std::make_unique<ShaderModule>(m_context);
-    m_vertexShaderModule->init("assets/shaders/renderVS.spv");
-    m_pixelShaderModule  = std::make_unique<ShaderModule>(m_context);
-    m_pixelShaderModule->init("assets/shaders/renderPS.spv");
+    auto vertexShaderModule = VulkanShaderModule::Create(device, "assets/shaders/renderVS.spv");
+    auto pixelShaderModule  = VulkanShaderModule::Create(device, "assets/shaders/renderPS.spv");
 
     // Vertex Input
     VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
     vertexInputInfo.sType                           = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-    vertexInputInfo.vertexBindingDescriptionCount   = static_cast<uint32_t>(m_bindingDescs.size());
-    vertexInputInfo.pVertexBindingDescriptions      = m_bindingDescs.data();
-    vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(m_attrDescs.size());
-    vertexInputInfo.pVertexAttributeDescriptions    = m_attrDescs.data();
+    vertexInputInfo.vertexBindingDescriptionCount   = static_cast<uint32_t>(bindingDescs.size());
+    vertexInputInfo.pVertexBindingDescriptions      = bindingDescs.data();
+    vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attrDescs.size());
+    vertexInputInfo.pVertexAttributeDescriptions    = attrDescs.data();
 
     // Input Assembly
     VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
@@ -65,12 +63,12 @@ void Pipeline::init(
     inputAssembly.primitiveRestartEnable = VK_FALSE;
 
     // Viewport
-    VkExtent2D swapchainExtent = m_swapchain.getExtent();
+    VkExtent2D swapchainExtent = swapchain.GetExtent();
 
     VkViewport viewport{};
     viewport.x = 0.0f;
     viewport.y = 0.0f;
-    viewport.width  = static_cast<float>(swapchainExtent.width);
+    viewport.width  = static_cast<float>(swapchain.GetExtent().width);
     viewport.height = static_cast<float>(swapchainExtent.height);
     viewport.minDepth = 0.0f;
     viewport.maxDepth = 1.0f;
@@ -121,21 +119,22 @@ void Pipeline::init(
     VkPipelineShaderStageCreateInfo shaderStages[] = {
         {
             VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, nullptr, 0,
-            VK_SHADER_STAGE_VERTEX_BIT, m_vertexShaderModule->getHandle(), "main", nullptr 
+            VK_SHADER_STAGE_VERTEX_BIT, vertexShaderModule->GetHandle(), "main", nullptr 
         },
         {
             VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, nullptr, 0,
-            VK_SHADER_STAGE_FRAGMENT_BIT, m_pixelShaderModule->getHandle(), "main", nullptr
+            VK_SHADER_STAGE_FRAGMENT_BIT, pixelShaderModule->GetHandle(), "main", nullptr
         }
     };
 
-    // Pipeline Layout
     VkPipelineLayoutCreateInfo graphicsPipelineLayoutInfo{};
     graphicsPipelineLayoutInfo.sType                  = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    graphicsPipelineLayoutInfo.setLayoutCount         = static_cast<uint32_t>(m_layoutDescs.size());
-    graphicsPipelineLayoutInfo.pSetLayouts            = m_layoutDescs.data();
+    graphicsPipelineLayoutInfo.setLayoutCount         = static_cast<uint32_t>(layoutDescs.size());
+    graphicsPipelineLayoutInfo.pSetLayouts            = layoutDescs.data();
 
-    result = vkCreatePipelineLayout(deviceHandle, &graphicsPipelineLayoutInfo, nullptr, &m_layout);
+    // Create Pipeline Layout
+    VkPipelineLayout layout = VK_NULL_HANDLE;
+    result = vkCreatePipelineLayout(device.GetHandle(), &graphicsPipelineLayoutInfo, nullptr, &layout);
     if (result != VK_SUCCESS)
     {
         std::cerr << "[ERROR]\t'vkCreatePipelineLayout' Failed with Error Code " << result << "\n";
@@ -156,12 +155,14 @@ void Pipeline::init(
     pipelineInfo.pRasterizationState = &rasterizer;
     pipelineInfo.pMultisampleState   = &multisampling;
     pipelineInfo.pColorBlendState    = &colorBlending;
-    pipelineInfo.layout              = m_layout;
-    pipelineInfo.renderPass          = m_renderPass.getHandle();
+    pipelineInfo.layout              = layout;
+    pipelineInfo.renderPass          = renderPass.GetHandle();
     pipelineInfo.subpass             = 0;
     pipelineInfo.basePipelineHandle  = VK_NULL_HANDLE;
 
-    result = vkCreateGraphicsPipelines(deviceHandle, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_handle);
+    // Create Pipeline
+    VkPipeline handle = VK_NULL_HANDLE;
+    result = vkCreateGraphicsPipelines(device.GetHandle(), VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &handle);
     if (result != VK_SUCCESS)
     {
         std::cerr << "[ERROR]\t'vkCreateGraphicsPipelines' Failed with Error Code " << result << "\n";
@@ -170,47 +171,70 @@ void Pipeline::init(
     }
 
     std::cout << "[INFO]\tGraphics Pipeline Created Successfully.\n";
+
+    return std::unique_ptr<VulkanPipeline>(
+        new VulkanPipeline(
+            device,
+            handle,
+            layout,
+            std::move(vertexShaderModule),
+            std::move(pixelShaderModule)
+        )
+    );
 }
 
-void Pipeline::cleanup()
+void VulkanPipeline::Cleanup()
 {   
-    VkDevice deviceHandle = m_context.getDevice().getHandle();
-
-    // Destroy Shader Modules
-    m_vertexShaderModule->cleanup();
-    m_pixelShaderModule->cleanup();
+    // Destroy Graphics Pipeline
+    if (m_handle != VK_NULL_HANDLE)
+    {
+        vkDestroyPipeline(m_device.GetHandle(), m_handle, nullptr);
+        m_handle = VK_NULL_HANDLE;
+    }
 
     // Destroy Pipeline Layout
     if (m_layout != VK_NULL_HANDLE)
     {
-        vkDestroyPipelineLayout(deviceHandle, m_layout, nullptr);
+        vkDestroyPipelineLayout(m_device.GetHandle(), m_layout, nullptr);
         m_layout = VK_NULL_HANDLE;
     }
-    
-    // Destroy Graphics Pipeline
-    if (m_handle != VK_NULL_HANDLE)
-    {
-        vkDestroyPipeline(deviceHandle, m_handle, nullptr);
-        m_handle = VK_NULL_HANDLE;
-    }
 }
 
-void Pipeline::bind(VkCommandBuffer commandBuffer)
-{
-    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_handle);
+void VulkanPipeline::Bind(
+    VkCommandBuffer vkCommandBuffer,
+    const std::vector<VkDescriptorSet> &vkDescriptorSets
+) {
+    vkCmdBindPipeline(
+        vkCommandBuffer,
+        VK_PIPELINE_BIND_POINT_GRAPHICS,
+        m_handle
+    );
+
+    vkCmdBindDescriptorSets(
+        vkCommandBuffer,
+        VK_PIPELINE_BIND_POINT_GRAPHICS,
+        m_layout,
+        0,
+        static_cast<uint32_t>(vkDescriptorSets.size()),
+        vkDescriptorSets.data(),
+        0,
+        nullptr
+    );
 }
 
-uint32_t Pipeline::beginFrame(VkCommandBuffer commandBuffer, uint32_t currentFrame)
-{
-    VkDevice       vkDevice    = m_context.getDevice().getHandle();
-    VkSwapchainKHR vkSwapchain = m_swapchain.getHandle();
-
+uint32_t VulkanPipeline::BeginFrame(
+    const VulkanSwapchain  &swapchain,
+    const VulkanRenderPass &renderPass,
+    const VulkanSync       &sync,
+    VkCommandBuffer vkCommandBuffer,
+    uint32_t        currentFrame
+) {
     VkResult result = VK_SUCCESS;
 
-    VkSemaphore imageAvailableSemaphore = m_synchronization.getImageSemaphores()[currentFrame]->getHandle();
+    VkSemaphore imageAvailableSemaphore = sync.GetImageSemaphores()[currentFrame]->GetHandle();
 
     uint32_t imageIndex;
-    result = vkAcquireNextImageKHR(vkDevice, vkSwapchain, UINT64_MAX, imageAvailableSemaphore, VK_NULL_HANDLE, &imageIndex);
+    result = vkAcquireNextImageKHR(m_device.GetHandle(), swapchain.GetHandle(), UINT64_MAX, imageAvailableSemaphore, VK_NULL_HANDLE, &imageIndex);
     if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
     {
         std::cerr << "[ERROR]\t'vkAcquireNextImageKHR' Failed with Error Code " << result << "\n";
@@ -221,29 +245,34 @@ uint32_t Pipeline::beginFrame(VkCommandBuffer commandBuffer, uint32_t currentFra
     // Begin Render Pass
     VkRenderPassBeginInfo renderPassInfo{};
     renderPassInfo.sType             = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-    renderPassInfo.renderPass        = m_renderPass.getHandle();
-    renderPassInfo.framebuffer       = m_swapchain.getFramebuffers()[imageIndex]->getHandle();
+    renderPassInfo.renderPass        = renderPass.GetHandle();
+    renderPassInfo.framebuffer       = swapchain.GetFramebuffers()[imageIndex]->GetHandle();
     renderPassInfo.renderArea.offset = {0, 0};
-    renderPassInfo.renderArea.extent = m_swapchain.getExtent();
+    renderPassInfo.renderArea.extent = swapchain.GetExtent();
 
     VkClearValue clearColor = {{{0.0f, 0.0f, 0.0f, 1.0f}}};
     renderPassInfo.clearValueCount = 1;
     renderPassInfo.pClearValues    = &clearColor;
 
-    vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+    vkCmdBeginRenderPass(vkCommandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
     return imageIndex;
 }
 
-void Pipeline::endFrame(VkCommandBuffer commandBuffer, uint32_t currentFrame, uint32_t imageIndex)
-{
-    VkSwapchainKHR swapchainHandle = m_swapchain.getHandle();
+void VulkanPipeline::EndFrame(
+    const VulkanSwapchain &swapchain,
+    const VulkanSync      &sync,
+    VkCommandBuffer vkCommandBuffer,
+    uint32_t        currentFrame,
+    uint32_t        imageIndex
+) {
+    VkSwapchainKHR swapchainHandle = swapchain.GetHandle();
 
     VkResult result = VK_SUCCESS;
 
-    vkCmdEndRenderPass(commandBuffer);
+    vkCmdEndRenderPass(vkCommandBuffer);
 
-    result = vkEndCommandBuffer(commandBuffer);
+    result = vkEndCommandBuffer(vkCommandBuffer);
     if (result != VK_SUCCESS)
     {
         std::cerr << "[ERROR]\t'vkEndCommandBuffer' Failed with Error Code " << result << "\n";
@@ -251,8 +280,8 @@ void Pipeline::endFrame(VkCommandBuffer commandBuffer, uint32_t currentFrame, ui
         throw std::runtime_error("Failed to End Command Buffer.");
     }
 
-    VkSemaphore imageAvailableSemaphore = m_synchronization.getImageSemaphores()[currentFrame]->getHandle();
-    VkSemaphore renderFinishedSemaphore = m_synchronization.getRenderSemaphores()[currentFrame]->getHandle();
+    VkSemaphore imageAvailableSemaphore = sync.GetImageSemaphores()[currentFrame]->GetHandle();
+    VkSemaphore renderFinishedSemaphore = sync.GetRenderSemaphores()[currentFrame]->GetHandle();
 
     // Submit
     VkSubmitInfo submitInfo{};
@@ -268,9 +297,9 @@ void Pipeline::endFrame(VkCommandBuffer commandBuffer, uint32_t currentFrame, ui
     submitInfo.pSignalSemaphores    = signalSemaphores.data();
     submitInfo.pWaitDstStageMask    = waitStages.data();
     submitInfo.commandBufferCount   = 1;
-    submitInfo.pCommandBuffers      = &commandBuffer;
+    submitInfo.pCommandBuffers      = &vkCommandBuffer;
 
-    result = vkQueueSubmit(m_context.getDevice().getGraphicsQueue(), 1, &submitInfo, m_synchronization.getInFlightFences()[currentFrame]->getHandle());
+    result = vkQueueSubmit(m_device.GetGraphicsQueue(), 1, &submitInfo, sync.GetInFlightFences()[currentFrame]->GetHandle());
     if (result != VK_SUCCESS)
     {
         std::cerr << "[ERROR]\t'vkQueueSubmit' Failed with Error Code " << result << "\n";
@@ -289,5 +318,34 @@ void Pipeline::endFrame(VkCommandBuffer commandBuffer, uint32_t currentFrame, ui
     presentInfo.pSwapchains     = swapchains.data();
     presentInfo.pImageIndices   = &imageIndex;
 
-    vkQueuePresentKHR(m_context.getDevice().getPresentQueue(), &presentInfo);
+    vkQueuePresentKHR(m_device.GetPresentQueue(), &presentInfo);
+}
+
+VulkanPipeline::VulkanPipeline(VulkanPipeline &&other) noexcept : 
+    m_device(other.m_device),
+    m_handle(other.m_handle),
+    m_layout(other.m_layout),
+    m_vertexShaderModule(std::move(other.m_vertexShaderModule)),
+    m_pixelShaderModule(std::move(other.m_pixelShaderModule))
+{
+    other.m_handle = VK_NULL_HANDLE;
+    other.m_layout = VK_NULL_HANDLE;
+}
+
+VulkanPipeline& VulkanPipeline::operator=(VulkanPipeline &&other) noexcept
+{
+    if (this != &other)
+    {
+        Cleanup();
+
+        m_handle = other.m_handle;
+        m_layout = other.m_layout;
+        m_vertexShaderModule = std::move(other.m_vertexShaderModule);
+        m_pixelShaderModule  = std::move(other.m_pixelShaderModule);
+
+        other.m_handle = VK_NULL_HANDLE;
+        other.m_layout = VK_NULL_HANDLE;
+    }
+
+    return *this;
 }

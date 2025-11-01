@@ -5,23 +5,29 @@
 #include <GLFW/glfw3.h>
 #include <vulkan/vulkan.h>
 
-#include "settings.hpp"
+#include "Settings.hpp"
 
 class Window;
-class Renderer;
+class VulkanScene;
+class VulkanRenderer;
 
 class App
 {
     public:
-        App();
         ~App();
 
-        void init();
-        void cleanup();
+        static App Create();
 
-        void run();
+        void Run();
 
     private:
-        std::unique_ptr<Window>   m_window;
-        std::unique_ptr<Renderer> m_renderer;
+        App(
+            std::unique_ptr<Window>         window,
+            std::unique_ptr<VulkanRenderer> renderer,
+            std::shared_ptr<VulkanScene>    scene
+        );
+
+        std::unique_ptr<Window>         m_window;
+        std::unique_ptr<VulkanRenderer> m_renderer;
+        std::shared_ptr<VulkanScene>    m_scene;
 };

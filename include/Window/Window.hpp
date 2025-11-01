@@ -1,30 +1,42 @@
 #pragma once
 
+#include <memory>
+#include <string>
+
 #include <GLFW/glfw3.h>
 
-#include <iostream>
-#include <string>
+#include "Settings.hpp"
 
 class Window
 {
     public:
-        Window();
         ~Window();
-
-        void init(int width, int height, const std::string &name);
-        void cleanup();
+        
+        static std::unique_ptr<Window> Create(
+            int width  = SCREEN_WIDTH,
+            int height = SCREEN_HEIGHT,
+            const std::string &name = SCREEN_NAME
+        );
 
         // Getters
-        int getWidth()  const { return width;  }
-        int getHeight() const { return height; }
-        const std::string& getName() const { return *name; }
+        int GetWidth()  const { return width; }
+        int GetHeight() const { return height; }
+        const std::string& GetName()   const { return *name; }
 
-        GLFWwindow* getHandle() const { return handle; }
+        GLFWwindow* GetHandle() const { return handle; }
 
     private:
+        Window() = default;
+        Window(
+            GLFWwindow *handle,
+            int width,
+            int height,
+            const std::string &name
+        );
+
+        GLFWwindow *handle = nullptr;
+
         int width;
         int height;
         const std::string* name = nullptr;
-
-        GLFWwindow *handle = nullptr;
 };

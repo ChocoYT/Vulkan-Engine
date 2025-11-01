@@ -1,21 +1,35 @@
 #include "Vulkan/Core/Instance.hpp"
 
-Instance::Instance() = default;
-Instance::~Instance()
+#include <iostream>
+#include <vector>
+
+#define GLFW_NO_INCLUDE_VULKAN
+#include <GLFW/glfw3.h>
+
+VulkanInstance::VulkanInstance(
+    VkInstance handle
+) : m_handle(handle)
+{}
+
+VulkanInstance::~VulkanInstance()
 {
-    cleanup();
+    Cleanup();
 }
 
-void Instance::init()
-{
+std::unique_ptr<VulkanInstance> VulkanInstance::Create(
+    const std::string &appName,
+    uint32_t          appVersion,
+    const std::string &engineName,
+    uint32_t          engineVersion
+) {
     VkResult result = VK_SUCCESS;
 
     // Application Info
     VkApplicationInfo appInfo{};
     appInfo.sType              = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-    appInfo.pApplicationName   = SCREEN_NAME.c_str();
+    appInfo.pApplicationName   = appName.c_str();
     appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
-    appInfo.pEngineName        = ENGINE_NAME.c_str();
+    appInfo.pEngineName        = engineName.c_str();
     appInfo.engineVersion      = VK_MAKE_VERSION(1, 0, 0);
     appInfo.apiVersion         = VK_API_VERSION_1_3;
 
@@ -54,7 +68,8 @@ void Instance::init()
     createInfo.ppEnabledLayerNames = layers.data();
 
     // Create Instance
-    result = vkCreateInstance(&createInfo, nullptr, &m_handle);
+    VkInstance handle = VK_NULL_HANDLE;
+    result = vkCreateInstance(&createInfo, nullptr, &handle);
     if (result != VK_SUCCESS)
     {
         std::cerr << "[ERROR]\t'vkCreateInstance' Failed with Error Code " << result << "\n";
@@ -63,9 +78,15 @@ void Instance::init()
     }
     
     std::cout << "[INFO]\tVulkan Instance Created Successfully.\n";
+    
+    return std::unique_ptr<VulkanInstance>(
+        new VulkanInstance(
+            handle
+        )
+    );
 }
 
-void Instance::cleanup()
+void VulkanInstance::Cleanup()
 {
     // Destroy Instance
     if (m_handle != VK_NULL_HANDLE)
@@ -73,4 +94,24 @@ void Instance::cleanup()
         vkDestroyInstance(m_handle, nullptr);
         m_handle = VK_NULL_HANDLE;
     }
+}
+
+VulkanInstance::VulkanInstance(VulkanInstance &&other) noexcept : 
+    m_handle(other.m_handle)
+{
+    other = VulkanInstance{};
+}
+
+VulkanInstance& VulkanInstance::operator=(VulkanInstance &&other) noexcept
+{
+    if (this != &other)
+    {
+        Cleanup();
+        
+        m_handle = other.m_handle;
+
+        other = VulkanInstance{};
+    }
+
+    return *this;
 }

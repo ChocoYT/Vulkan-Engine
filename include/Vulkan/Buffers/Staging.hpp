@@ -5,34 +5,51 @@
 
 #include <vulkan/vulkan.h>
 
-class Context;
-class CommandPool;
-class MemoryAllocator;
+class VulkanPhysicalDevice;
+class VulkanDevice;
+class VulkanMemoryAllocator;
+class VulkanCommandPool;
 
-class Buffer;
+class VulkanBuffer;
 
-class StagingBuffer
+class VulkanStagingBuffer
 {
     public:
-        StagingBuffer(
-            const Context     &context,
-            const CommandPool &commandPool,
-            MemoryAllocator   &allocator
+        ~VulkanStagingBuffer();
+
+        static std::unique_ptr<VulkanStagingBuffer> Create(
+            const VulkanPhysicalDevice &physicalDevice,
+            const VulkanDevice         &device,
+            VulkanMemoryAllocator      &allocator,
+            VkDeviceSize size
         );
-        ~StagingBuffer();
 
-        void init(VkDeviceSize bufferSize);
-        void cleanup();
+        void Update(void *data);
 
-        void update(void *bufferData);
-        void copyTo(const Buffer &dst);
+        void CopyTo(
+            const VulkanCommandPool &commandPool,
+            const VulkanBuffer      &dst
+        );
+
+        // Getters
+        VkDeviceSize GetSize() const { return m_size; }
 
     private:
-        std::unique_ptr<Buffer> m_buffer;
+        VulkanStagingBuffer() = default;
+        VulkanStagingBuffer(
+            std::unique_ptr<VulkanBuffer> buffer,
+            VkDeviceSize size
+        );
 
-        VkDeviceSize m_bufferSize = 0;
+        // Remove Copying Semantics
+        VulkanStagingBuffer(const VulkanStagingBuffer&) = delete;
+        VulkanStagingBuffer& operator=(const VulkanStagingBuffer&) = delete;
+        
+        // Safe Move Semantics
+        VulkanStagingBuffer(VulkanStagingBuffer &&other) noexcept;
+        VulkanStagingBuffer& operator=(VulkanStagingBuffer &&other) noexcept;
 
-        const Context     &m_context;
-        const CommandPool &m_commandPool;
-        MemoryAllocator   &m_allocator;
+        std::unique_ptr<VulkanBuffer> m_buffer;
+
+        VkDeviceSize m_size = 0;
 };
