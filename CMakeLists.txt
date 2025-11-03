@@ -38,11 +38,12 @@ set(CMAKE_INSTALL_PREFIX ${CMAKE_BINARY_DIR}/install CACHE PATH "Install path" F
 find_package(Vulkan REQUIRED)
 add_subdirectory(external/glfw)
 add_subdirectory(external/glm)
+add_subdirectory(external/assimp)
 
 target_link_libraries(${PROJECT_NAME} PRIVATE
     Vulkan::Vulkan
     glfw
-    glm
+    assimp
 )
 
 # Runtime Output
